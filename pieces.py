@@ -37,6 +37,7 @@ class Pion(Piece):
         super().__init__(canvas, nb_colonnes, nb_lignes, proprietaire, couleur, image, case_x, case_y)
         self.deplacements = [[(0, 1), (0, 2)]] if self.couleur == COULEUR_PIECE2 else [[(0, -1), (0, -2)]]
         self.attaques = [[(1, 1)], [(-1, 1)]] if self.couleur == COULEUR_PIECE2 else [[(-1, -1)], [(1, -1)]]
+        self.a_bouge = False
 
 
 class Tour(Piece):
