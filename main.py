@@ -6,6 +6,9 @@
 #   Fonction temps
 #   Autres fonctions
 #   Améliorer graphiques
+#   Bien tout reset dans plateau
+#   Changer le système joueur_actif/adversaire
+#   Vérifier les effacements de choses qui doivent être effacées
 
 ### Bibliothéques ######################################################################################################
 ### Externes ###
@@ -221,8 +224,6 @@ class Plateau:
                 if case_y == 3 or case_y == 4:
                     self.case_prise_en_passant = (case_x, int((self.case_active[1]+case_y)/2))
                     prise_en_passant_possible_ce_tour = True
-                    print(self.case_active[1], case_y)
-                    print(self.case_prise_en_passant)
                 self.coups[case_x][case_y].deplacements = [[(0, 1)]] if self.coups[case_x][case_y].couleur == \
                                                                         COULEUR_PIECE2 else [[(0, -1)]]
                 self.coups[case_x][case_y].a_bouge = True
@@ -325,6 +326,106 @@ class Plateau:
         self.sauv_piece_mangee_fictivement = 0
 
 
+class GestionnaireConditionsVictoire:
+    def __init__(self):
+        # Gestionnaire état du jeu
+        self.gestionnaire_fin_jeu = GestionnaireFinJeu()
+
+    def gerer_conditions_victoire(self, joueur_actif, adversaire):
+        self.gestion_menaces_roi(joueur_actif, adversaire)
+        self.gestion_manque_materiel(joueur_actif)
+
+    def gestion_menaces_roi(self, joueur_actif, adversaire):
+        if not self.adversaire_a_coup_possible(joueur_actif, adversaire):
+            if self.adversaire_en_echec(joueur_actif, adversaire):
+                self.gestionnaire_fin_jeu.arreter_jeu(GestionnaireFinJeu.VICTOIRE)
+            else:
+                self.gestionnaire_fin_jeu.arreter_jeu(GestionnaireFinJeu.PAT)
+        plateau.desactiver_case_active()
+
+    def adversaire_a_coup_possible(self, joueur_actif, adversaire):
+        for i in range(NB_COLONNES):
+            for j in range(NB_LIGNES):
+                if plateau.case_contient_piece_a(i, j, adversaire):
+                    if self.piece_a_coup_possible(i, j, joueur_actif, adversaire):
+                        return True
+        return False
+
+    def piece_a_coup_possible(self, x, y, joueur_actif, adversaire):
+        plateau.activer_case(x, y, adversaire, joueur_actif)
+        for i in range(NB_COLONNES):
+            for j in range(NB_LIGNES):
+                if plateau.coups_possibles[i][j] != plateau.d_coups["non"]:
+                    plateau.desactiver_case_active()
+                    return True
+        plateau.desactiver_case_active()
+        return False
+
+    def adversaire_en_echec(self, joueur_actif, adversaire):
+        roi_adverse_x, roi_adverse_y = plateau.pos_roi_n if joueur_actif == 1 else plateau.pos_roi_b
+        plateau.calculer_cases_controlees_par(joueur_actif, adversaire)
+        if plateau.cases_controlees[roi_adverse_x][roi_adverse_y] != plateau.d_coups["non"]:
+            plateau.effacer_cases_controlees()
+            return True
+        plateau.effacer_cases_controlees()
+        return False
+
+    def gestion_manque_materiel(self, joueur):
+        if self.manque_materiel(joueur):
+            self.gestionnaire_fin_jeu.arreter_jeu(GestionnaireFinJeu.MANQUE_MATERIEL)
+            main_canvas.unbind("<1>")
+
+    def manque_materiel(self, joueur1):
+        compteur_fous_joueur1 = 0
+        compteur_cavaliers_joueur1 = 0
+        compteur_fous_joueur2 = 0
+        compteur_cavaliers_joueur2 = 0
+        for i in range(NB_COLONNES):
+            for j in range(NB_LIGNES):
+                if isinstance(plateau.coups[i][j], (Pion, Tour, Reine)):
+                    return False
+                elif isinstance(plateau.coups[i][j], Fou):
+                    if plateau.coups[i][j].proprietaire == joueur1:
+                        compteur_fous_joueur1 += 1
+                    else:
+                        compteur_fous_joueur2 += 1
+                elif isinstance(plateau.coups[i][j], Cavalier):
+                    if plateau.coups[i][j].proprietaire == joueur1:
+                        compteur_cavaliers_joueur1 += 1
+                    else:
+                        compteur_cavaliers_joueur2 += 1
+
+                if compteur_fous_joueur1 > 1 or compteur_fous_joueur2 > 1 \
+                   or compteur_fous_joueur1+compteur_fous_joueur2 > 2 \
+                   or compteur_cavaliers_joueur1+compteur_cavaliers_joueur2 > 2:
+                    return False
+        return True
+
+    def reset(self):
+        self.gestionnaire_fin_jeu.reset()
+
+
+class GestionnaireFinJeu:
+    """Gestion état du jeu"""
+
+    VICTOIRE = 0
+    MANQUE_TEMPS = 1
+    MANQUE_MATERIEL = 2
+    PAT = 3
+    TROIS_FOIS_MEME_POSITION = 4
+    CINQUANTE_TOURS_SANS_EVOLUTION = 5
+
+    def __init__(self):
+        self.etat_jeu = None
+
+    def arreter_jeu(self, nouvel_etat_jeu):
+        self.etat_jeu = nouvel_etat_jeu
+        main_canvas.unbind("<1>")
+
+    def reset(self):
+        self.etat_jeu = None
+
+
 class Jeu:
     """Gestion générale du jeu"""
 
@@ -336,12 +437,13 @@ class Jeu:
         self.joueur_actif = 1
         self.symbole_actif = "X"
         self.nb_tours = 1
-        self.victoire = False
-        self.pat = False
 
         # Infos de jeu
         self.infos = tk.Label(main_window, text=f"Tour {self.nb_tours} - Au joueur {self.joueur_actif} de jouer")
         self.infos.grid(row=1, column=0, columnspan=2)
+
+        # Gestionnaire fin de jeu
+        self.gestionnaire_conditions_victoire = GestionnaireConditionsVictoire()
 
     def gestion_souris(self, evt):
         # Clic gauche
@@ -354,133 +456,22 @@ class Jeu:
                 case_x, case_y = int(evt.x * NB_COLONNES // LARGEUR), int(evt.y * NB_LIGNES / HAUTEUR)
                 if plateau.coups_possibles[case_x][case_y] == plateau.d_coups["oui"]:
                     plateau.jouer_coup(case_x, case_y, False)
-                    self.gestion_fin_partie()
+                    self.gestionnaire_conditions_victoire.gerer_conditions_victoire(self.joueur_actif, adversaire)
                     self.maj_infos()
                 elif plateau.coups_possibles[case_x][case_y] == plateau.d_coups["roque"]:
                     plateau.jouer_coup(case_x, case_y, True)
-                    self.gestion_fin_partie()
+                    self.gestionnaire_conditions_victoire.gerer_conditions_victoire(self.joueur_actif, adversaire)
                     self.maj_infos()
                 else:
                     plateau.desactiver_case_active()
 
-    def gestion_fin_partie(self):
-        self.gestion_echec()
-
-    def gestion_echec(self):
-        if not self.adversaire_a_coup_possible():
-            if self.adversaire_en_echec():
-                self.victoire = True
-                main_canvas.unbind("<1>")
-            else:
-                self.pat = True
-                main_canvas.unbind("<1>")
-        plateau.desactiver_case_active()
-
-    def adversaire_a_coup_possible(self):
-        adversaire = self.joueur_actif % 2 + 1
-        for i in range(NB_COLONNES):
-            for j in range(NB_LIGNES):
-                if plateau.case_contient_piece_a(i, j, adversaire):
-                    if self.piece_a_coup_possible(i, j, adversaire):
-                        return True
-        return False
-
-    def piece_a_coup_possible(self, x, y, adversaire):
-        plateau.activer_case(x, y, adversaire, self.joueur_actif)
-        for i in range(NB_COLONNES):
-            for j in range(NB_LIGNES):
-                if plateau.coups_possibles[i][j] != plateau.d_coups["non"]:
-                    plateau.desactiver_case_active()
-                    return True
-        plateau.desactiver_case_active()
-        return False
-
-    def adversaire_en_echec(self):
-        roi_adverse_x, roi_adverse_y = plateau.pos_roi_n if self.joueur_actif == 1 else plateau.pos_roi_b
-        adversaire = self.joueur_actif % 2 + 1
-        plateau.calculer_cases_controlees_par(self.joueur_actif, adversaire)
-        if plateau.cases_controlees[roi_adverse_x][roi_adverse_y] != plateau.d_coups["non"]:
-            return True
-        return False
-
-    """def verifier_et_gerer_victoire(self, coups):
-        dim_max = max(NB_COLONNES,NB_LIGNES)
-        dim_min = min(NB_COLONNES,NB_LIGNES)
-
-        #Colonnes
-        for i in range(NB_COLONNES):
-            compteur_c = 0
-            for j in range(NB_LIGNES):
-                compteur_c = compteur_c+1 if coups[i][j] == self.joueur_actif else 0
-                if compteur_c == nb_symboles_a_aligner:
-                    self.gerer_victoire(("c", i, j))
-                    return
-
-        #Lignes
-        for j in range(NB_LIGNES):
-            compteur_l = 0
-            for i in range(NB_COLONNES):
-                compteur_l = compteur_l+1 if coups[i][j] == self.joueur_actif else 0
-                if compteur_l == nb_symboles_a_aligner:
-                    self.gerer_victoire(("l", i, j))
-                    return
-
-        #Diagonales (triangles aux coins)
-        for i in range(nb_symboles_a_aligner, dim_min+1):
-            compteur_d11, compteur_d12, compteur_d21, compteur_d22 = 0, 0, 0, 0 #2 diagonales primaires et 2 secondaires
-            for j in range(i):
-                compteur_d11 = compteur_d11+1 if coups[j][NB_LIGNES-i+j] == self.joueur_actif else 0 #Triangle inférieur gauche
-                compteur_d12 = compteur_d12+1 if coups[NB_COLONNES-i+j][j] == self.joueur_actif else 0 #Triangle supérieur droit
-                compteur_d21 = compteur_d21+1 if coups[NB_COLONNES-1-j][NB_LIGNES-i+j] == self.joueur_actif else 0 #Triangle inférieur droit
-                compteur_d22 = compteur_d22+1 if coups[i-j-1][j] == self.joueur_actif else 0 #Triangle supérieur gauche
-                if compteur_d11 == nb_symboles_a_aligner or compteur_d12 == nb_symboles_a_aligner:
-                    self.gerer_victoire(("d1", j, NB_LIGNES-i+j) if compteur_d11 > compteur_d12 else ("d1", NB_COLONNES-i+j, j))
-                    return
-                elif compteur_d21 == nb_symboles_a_aligner or compteur_d22 == nb_symboles_a_aligner:
-                    self.gerer_victoire(("d2", NB_COLONNES-1-j, NB_LIGNES-i+j) if compteur_d21 > compteur_d22 else ("d2", i-j-1, j))
-                    return
-
-        #Diagonales (du milieu)
-        for i in range(dim_max-dim_min-1):
-            compteur_d1, compteur_d2 = 0, 0
-            for j in range(dim_min):
-                if NB_LIGNES <  NB_COLONNES:
-                    compteur_d1 = compteur_d1+1 if coups[j+1+i][j] == self.joueur_actif else 0 #Première diagonale
-                    compteur_d2 = compteur_d2+1 if coups[dim_max-2-j-i][j] == self.joueur_actif else 0 #Deuxième diagonale
-                    if compteur_d1 == nb_symboles_a_aligner or compteur_d2 == nb_symboles_a_aligner:
-                        self.gerer_victoire(("d1", j+1+i, j) if compteur_d1 > compteur_d2 else ("d2", dim_max-2-j-i, j))
-                        return
-                else:
-                    compteur_d1 = compteur_d1+1 if coups[j][j+1+i] == self.joueur_actif else 0 #Première diagonale
-                    compteur_d2 = compteur_d2+1 if coups[dim_min-1-j][1+j+i] == self.joueur_actif else 0 #Deuxième diagonale
-                    if compteur_d1 == nb_symboles_a_aligner or compteur_d2 == nb_symboles_a_aligner:
-                        self.gerer_victoire(("d1", j, j+1+i) if compteur_d1 > compteur_d2 else ("d2", dim_min-1-j, 1+j+i))
-                        return
-
-    def gerer_victoire(self, emplacement): #Emplacement contient la direction de l'alignement et les indices du premier symbole
-        self.victoire = True
-
-        direction, colonne_debut, ligne_debut = emplacement[0], emplacement[1], emplacement[2]
-        if direction == "c":
-            for i in range(nb_symboles_a_aligner):
-                plateau.dessiner_symbole(colonne_debut, ligne_debut-i, self.symbole_actif, "red", plateau.symboles)
-        elif direction == "l":
-            for i in range(nb_symboles_a_aligner):
-                plateau.dessiner_symbole(colonne_debut-i, ligne_debut, self.symbole_actif, "red", plateau.symboles)
-        elif direction == "d1":
-            for i in range(nb_symboles_a_aligner):
-                plateau.dessiner_symbole(colonne_debut-i, ligne_debut-i, self.symbole_actif, "red", plateau.symboles)
-        elif direction == "d2":
-            for i in range(nb_symboles_a_aligner):
-                plateau.dessiner_symbole(colonne_debut+i, ligne_debut-i, self.symbole_actif, "red", plateau.symboles)
-
-        main_canvas.unbind("<1>")"""
-
     def maj_infos(self):
-        if self.victoire:
+        if self.gestionnaire_conditions_victoire.gestionnaire_fin_jeu.etat_jeu == GestionnaireFinJeu.VICTOIRE:
             self.infos.config(text=f"Victoire joueur {self.joueur_actif}", fg="red")
-        elif self.pat:
+        elif self.gestionnaire_conditions_victoire.gestionnaire_fin_jeu.etat_jeu == GestionnaireFinJeu.PAT:
             self.infos.config(text="Égalité par pat", fg="red")
+        elif self.gestionnaire_conditions_victoire.gestionnaire_fin_jeu.etat_jeu == GestionnaireFinJeu.MANQUE_MATERIEL:
+            self.infos.config(text="Égalité par manque de matériel", fg="red")
         else:
             self.joueur_actif = self.joueur_actif % 2 + 1
             self.nb_tours += 1
@@ -488,6 +479,7 @@ class Jeu:
 
     def nouvelle_partie(self):
         plateau.reset()
+        self.gestionnaire_conditions_victoire.reset()
         main_canvas.bind("<1>", self.gestion_souris)
 
         self.joueur_actif = 1
