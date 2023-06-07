@@ -1,12 +1,11 @@
 # TODO
 #   3x même position pendant partie = fin (deux positions sont identiques si le trait est le même et si les possibilités
 #   de prise en passant et de roque sont les mêmes)
-#   50 tours + pas de pion bougé ni prise de pièce = fin
 #   Fonction temps
 #   Autres fonctions
 #   Améliorer graphiques
 
-### Bibliothéques ######################################################################################################
+### Bibliothèques ######################################################################################################
 ### Externes ###
 import tkinter as tk
 from math import copysign
@@ -49,6 +48,10 @@ class Plateau:
 
         self.sauv_piece_mangee_fictivement = None
 
+        # Informations sur le tour
+        self.pion_bouge_ce_tour = False
+        self.piece_mangee_ce_tour = False
+
     def generer_pieces(self):
         indices_lignes = [0, 1, NB_LIGNES - 2, NB_LIGNES - 1]
         for i in range(NB_COLONNES):
@@ -79,6 +82,8 @@ class Plateau:
         return False
 
     def selectionner_piece(self, case_x, case_y, joueur_actif, adversaire):
+        """Sélectionne une pièce si elle appartient au joueur actif et calcule ses coups possibles.
+        Une fois sélectionnée, un coup valide peut-être joué en appelant la méthode 'jouer_coup()'."""
         if self.case_contient_piece_a(case_x, case_y, joueur_actif):
             self.activer_piece(case_x, case_y)
             self.calculer_coups_possibles_piece_active(adversaire)
@@ -97,7 +102,9 @@ class Plateau:
     def desactiver_piece_active(self):
         self.case_active = (None, None)
 
-    def calculer_deplacements_ou_controles_par_piece_active(self, conteneur, select):  # Calcul les déplacements possibles ou cases contrôlées par la pièce active en fonction de select
+    def calculer_deplacements_ou_controles_par_piece_active(self, conteneur, select):
+        """Calcul les déplacements possibles ou cases contrôlées par la pièce active en fonction de select.
+        Avec select = 1, calcule les déplacements possibles, avec select = 2 les cases contrôlées."""
         act_x, act_y = self.case_active
         proprietaire_piece_active = self.coups[act_x][act_y].proprietaire
 
@@ -123,7 +130,7 @@ class Plateau:
                     if select == 2 or (self.coups[act_x + attaque[0][0]][act_y + attaque[0][1]] is not None
                                        and not self.case_contient_piece_a(act_x + attaque[0][0], act_y + attaque[0][1],
                                                                           proprietaire_piece_active)) \
-                                   or self.case_prise_en_passant == (act_x + attaque[0][0], act_y + attaque[0][1]):
+                                   or self.case_prise_en_passant == (act_x + attaque[0][0], act_y + attaque[0][1]): # Déplacement possible si pièce adverse ou si prise en passant
                         conteneur[act_x + attaque[0][0]][act_y + attaque[0][1]] = self.d_coups["oui"]
 
         # Roque
@@ -218,13 +225,17 @@ class Plateau:
         self.coups[case_x_fin][case_y_fin] = self.coups[case_x_init][case_y_init]
         self.coups[case_x_init][case_y_init] = None
 
-    def jouer_coup(self, case_x, case_y, roque):
+    def jouer_coup(self, case_x, case_y, roque):  # Renvoie un couple de bool, indiquant respectivement si une pièce a été mangé ce tour et si un pion a été bougé ce tour
+        """À appeler seulement si le coup est possible.
+        Déplace la pièce active sur la case (case_x, case_y) et applique les règles."""
         self.deplacer_piece_active(case_x, case_y)
         self.gerer_deplacement_pions(case_x, case_y)
         self.deselectionner_piece_active()
         self.gerer_choses_relatives_au_roi(case_x, case_y, roque)
 
     def deplacer_piece_active(self, case_x, case_y):
+        # Maj infos jeu
+        self.piece_mangee_ce_tour = True if self.coups[case_x][case_y] is not None else False
         # Effacement image pièce mangée
         self.effacer_image(case_x, case_y)
         # Déplacement de l'objet
@@ -235,6 +246,7 @@ class Plateau:
     def gerer_deplacement_pions(self, case_x, case_y):  # Réduction portée pions après 1er déplacement + double pas + prise en passant + promotion
         prise_en_passant_possible_ce_tour = False
         if isinstance(self.coups[case_x][case_y], Pion):
+            self.pion_bouge_ce_tour = True  # Maj infos de jeu
             if case_y in (0, 7):  # Promotion
                 self.promotion_pion(case_x, case_y, self.coups[case_x][case_y].couleur,
                                     self.coups[case_x][case_y].proprietaire)
@@ -248,6 +260,8 @@ class Plateau:
             elif self.case_prise_en_passant == (case_x, case_y):  # Prise adverse en passant
                 self.effacer_image(case_x, case_y+1 if case_y == 2 else case_y-1)
                 self.coups[case_x][case_y+1 if case_y == 2 else case_y-1] = None
+        else:
+            self.pion_bouge_ce_tour = False  # Maj infos de jeu
         if not prise_en_passant_possible_ce_tour:
             self.case_prise_en_passant = (None, None)
 
@@ -351,9 +365,13 @@ class GestionnaireConditionsVictoire:
         # Gestionnaire état du jeu
         self.gestionnaire_fin_jeu = GestionnaireFinJeu()
 
+        # Conditions de victoire
+        self.compteur_tours_sans_evolution = 0
+
     def gerer_conditions_victoire(self, joueur_actif, adversaire):
         self.gestion_menaces_roi(joueur_actif, adversaire)
         self.gestion_manque_materiel(joueur_actif)
+        self.gestion_50_tours_sans_evolution()
 
     def gestion_menaces_roi(self, joueur_actif, adversaire):
         if not self.adversaire_a_coup_possible(joueur_actif, adversaire):
@@ -395,7 +413,6 @@ class GestionnaireConditionsVictoire:
     def gestion_manque_materiel(self, joueur):
         if self.manque_materiel(joueur):
             self.gestionnaire_fin_jeu.arreter_jeu(GestionnaireFinJeu.MANQUE_MATERIEL)
-            main_canvas.unbind("<1>")
 
     def manque_materiel(self, joueur1):
         compteur_fous_joueur1 = 0
@@ -422,6 +439,17 @@ class GestionnaireConditionsVictoire:
                    or compteur_cavaliers_joueur1+compteur_cavaliers_joueur2 > 2:
                     return False
         return True
+
+    def gestion_50_tours_sans_evolution(self):
+        self.maj_nb_tours_sans_evolution()
+        if self.compteur_tours_sans_evolution > 49:
+            self.gestionnaire_fin_jeu.arreter_jeu(GestionnaireFinJeu.CINQUANTE_TOURS_SANS_EVOLUTION)
+
+    def maj_nb_tours_sans_evolution(self):
+        if plateau.piece_mangee_ce_tour or plateau.pion_bouge_ce_tour:
+            self.compteur_tours_sans_evolution = 0
+        else:
+            self.compteur_tours_sans_evolution += 1
 
     def reset(self):
         self.gestionnaire_fin_jeu.reset()
@@ -492,6 +520,9 @@ class Jeu:
             self.infos.config(text="Égalité par pat", fg="red")
         elif self.gestionnaire_conditions_victoire.gestionnaire_fin_jeu.etat_jeu == GestionnaireFinJeu.MANQUE_MATERIEL:
             self.infos.config(text="Égalité par manque de matériel", fg="red")
+        elif self.gestionnaire_conditions_victoire.gestionnaire_fin_jeu.etat_jeu == GestionnaireFinJeu.CINQUANTE_TOURS_SANS_EVOLUTION:
+            self.infos.config(text="Égalité car les 50 derniers coups consécutifs ont été joués par chaque joueur sans "
+                                   "mouvement de pion ni prise de pièce.", fg="red")
         else:
             self.joueur_actif = self.joueur_actif % 2 + 1
             self.nb_tours += 1
