@@ -225,9 +225,10 @@ class Plateau:
         self.coups[case_x_fin][case_y_fin] = self.coups[case_x_init][case_y_init]
         self.coups[case_x_init][case_y_init] = None
 
-    def jouer_coup(self, case_x, case_y, roque):  # Renvoie un couple de bool, indiquant respectivement si une pièce a été mangé ce tour et si un pion a été bougé ce tour
+    def jouer_coup(self, case_x, case_y, roque):
         """À appeler seulement si le coup est possible.
-        Déplace la pièce active sur la case (case_x, case_y) et applique les règles."""
+        Déplace la pièce active sur la case (case_x, case_y) et applique les règles.
+        Met également à jour certaines informations sur le jeu."""
         self.deplacer_piece_active(case_x, case_y)
         self.gerer_deplacement_pions(case_x, case_y)
         self.deselectionner_piece_active()
