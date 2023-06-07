@@ -1,8 +1,10 @@
-### Bibliothéques ######################################################################################################
+### Bibliothèques ######################################################################################################
 ### Externes ###
 from PIL import ImageTk, Image
 ### Paramètres de jeu ###
 from constantes import *
+
+### Classes ############################################################################################################
 
 
 class Piece:
@@ -20,7 +22,7 @@ class Piece:
         rayon_x = int(largeur / (2 * nb_colonnes) - 10)
         rayon_y = int(hauteur / (2 * nb_lignes) - 10)
         self.image_tk = ImageTk.PhotoImage(Image.open(image).resize((2 * rayon_x, 2 * rayon_y)))
-        self.image_canvas = canvas.create_image(x, y, image=self.image_tk)  # Ici on utilise self sur image_canvas car on veut la conserver.
+        self.image_canvas = canvas.create_image(x, y, image=self.image_tk)  # Ici, on utilise self sur image_canvas car on veut la conserver.
                                                                             # Il faut aussi le mettre sur image_tk car on doit la conserver pour image_canvas
                                                                             # On ne met pas self sur les variables qui doivent être détruite
                                                                             # à la fin de la méthode.

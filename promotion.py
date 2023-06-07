@@ -1,4 +1,4 @@
-### Bibliothéques ######################################################################################################
+### Bibliothèques ######################################################################################################
 ### Externes ###
 import tkinter as tk
 ### Fichiers internes ###
@@ -7,6 +7,8 @@ from pieces import Piece, Pion, Tour, Cavalier, Fou, Reine
 ### Paramètres de jeu ###
 from constantes import NB_TYPES_PIECES, NB_LIGNES_PROMOTION, LARGEUR_PROMOTION, HAUTEUR_PROMOTION, COULEUR_PIECE1, \
                        COULEUR_PIECE2
+
+### Classes ############################################################################################################
 
 
 class Promotion:
