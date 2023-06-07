@@ -1,14 +1,10 @@
 # TODO
-#   Manque de matériel pour finir = fin
 #   3x même position pendant partie = fin (deux positions sont identiques si le trait est le même et si les possibilités
 #   de prise en passant et de roque sont les mêmes)
 #   50 tours + pas de pion bougé ni prise de pièce = fin
 #   Fonction temps
 #   Autres fonctions
 #   Améliorer graphiques
-#   Bien tout reset dans plateau
-#   Changer le système joueur_actif/adversaire
-#   Vérifier les effacements de choses qui doivent être effacées
 
 ### Bibliothéques ######################################################################################################
 ### Externes ###
@@ -31,25 +27,27 @@ class Plateau:
         # Damier
         self.damier = Damier(main_canvas, NB_COLONNES, NB_LIGNES, LARGEUR, HAUTEUR)
 
+        # Dictionnaire des coups
+        self.d_coups = {"non": 0, "oui": 1, "roque": 2}
+
         # Génération et dessin pièces
-        self.coups = [[0] * NB_LIGNES for _ in range(NB_COLONNES)]  # Système de coord.: Premier indice vers la droite et deuxième vers le bas, à partir du coin haut gauche
+        self.coups = [[None] * NB_LIGNES for _ in range(NB_COLONNES)]  # Système de coord.: Premier indice vers la droite et deuxième vers le bas, à partir du coin haut gauche
         self.generer_pieces()
 
-        self.case_active = (-1, -1)
-        self.case_prise_en_passant = (-1, -1)
+        self.case_active = (None, None)
+        self.case_prise_en_passant = (None, None)
 
         # Déplacements légaux (ne prend pas en compte l'échec)
-        self.deplacements_possibles = [[0] * NB_LIGNES for _ in range(NB_COLONNES)]
-        self.d_coups = {"non": 0, "oui": 1, "roque": 2}
+        self.deplacements_possibles = [[self.d_coups["non"]] * NB_LIGNES for _ in range(NB_COLONNES)]
 
         # Calcul de l'échec:
         self.pos_roi_b, self.pos_roi_n = (4, 0), (4, 7)
-        self.cases_controlees = [[0] * NB_LIGNES for _ in range(NB_COLONNES)]
+        self.cases_controlees = [[self.d_coups["non"]] * NB_LIGNES for _ in range(NB_COLONNES)]
 
         # Coups possibles (déplacements légaux + pas d'échec à son propre roi)
-        self.coups_possibles = [[0] * NB_LIGNES for _ in range(NB_COLONNES)]
+        self.coups_possibles = [[self.d_coups["non"]] * NB_LIGNES for _ in range(NB_COLONNES)]
 
-        self.sauv_piece_mangee_fictivement = 0
+        self.sauv_piece_mangee_fictivement = None
 
     def generer_pieces(self):
         indices_lignes = [0, 1, NB_LIGNES - 2, NB_LIGNES - 1]
@@ -75,54 +73,40 @@ class Plateau:
                         self.coups[i][j] = Roi(main_canvas, NB_COLONNES, NB_LIGNES, 1 if j == 0 else 2,
                                                COULEUR_PIECE2 if j == 0 else COULEUR_PIECE1, i, j)
 
-    def activer_case(self, case_x, case_y, joueur_actif, adversaire):
-        if self.case_contient_piece_a(case_x, case_y, joueur_actif):
-            self.case_active = (case_x, case_y)
-            self.damier.changer_couleur_case(case_x, case_y, COULEUR_CASE_ACTIVE)
-
-            self.calculer_deplacements_ou_controles_par_piece_active(joueur_actif, adversaire,
-                                                                     self.deplacements_possibles, 1)
-
-            for i in range(NB_COLONNES):
-                for j in range(NB_LIGNES):
-                    if self.deplacements_possibles[i][j] in (self.d_coups["oui"], self.d_coups["roque"]):
-                        self.deplacement_fictif_piece_active(i, j, not bool(
-                            self.deplacements_possibles[i][j] != self.d_coups["roque"]))
-                        self.calculer_cases_controlees_par(adversaire, joueur_actif)
-                        self.case_active = (case_x, case_y)
-                        pos_roi_x = self.pos_roi_n[0] if self.coups[i][j].couleur != COULEUR_PIECE2 else \
-                                    self.pos_roi_b[0]
-                        pos_roi_y = self.pos_roi_n[1] if self.coups[i][j].couleur != COULEUR_PIECE2 else \
-                                    self.pos_roi_b[1]
-                        if self.cases_controlees[pos_roi_x][pos_roi_y] == self.d_coups["non"]:
-                            if self.deplacements_possibles[i][j] != self.d_coups["roque"]:
-                                self.coups_possibles[i][j] = self.d_coups["oui"]
-                            elif self.cases_controlees[pos_roi_x + int(copysign(1, 4 - pos_roi_x))][pos_roi_y] == \
-                                 self.d_coups["non"]:  # Les cases de passage du roi ne doivent pas être contrôlées
-                                self.coups_possibles[i][j] = self.d_coups["roque"]
-                        self.retour_deplacement_fictif(i, j, not bool(
-                            self.deplacements_possibles[i][j] != self.d_coups["roque"]))
-                        self.case_active = (case_x, case_y)
-                        self.effacer_cases_controlees()
-
-            self.effacer_deplacements_possibles()
-
-            self.changer_couleur_coups_possibles()
-
     def case_contient_piece_a(self, case_x, case_y, joueur):
-        if self.coups[case_x][case_y] != 0 and self.coups[case_x][case_y].proprietaire == joueur:
+        if self.coups[case_x][case_y] is not None and self.coups[case_x][case_y].proprietaire == joueur:
             return True
         return False
 
-    def calculer_deplacements_ou_controles_par_piece_active(self, proprietaire_piece_active, adversaire, conteneur, select):  # Calcul les déplacements possibles ou cases contrôlées par la pièce active en fonction de select
+    def selectionner_piece(self, case_x, case_y, joueur_actif, adversaire):
+        if self.case_contient_piece_a(case_x, case_y, joueur_actif):
+            self.activer_piece(case_x, case_y)
+            self.calculer_coups_possibles_piece_active(adversaire)
+            self.changer_couleur_case_active()
+            self.changer_couleur_coups_possibles()
+
+    def deselectionner_piece_active(self):
+        self.reset_couleur_case_active()
+        self.reset_couleur_coups_possibles()
+        self.desactiver_piece_active()
+        self.effacer_tableau_coups_possibles()
+
+    def activer_piece(self, case_x, case_y):
+        self.case_active = (case_x, case_y)
+
+    def desactiver_piece_active(self):
+        self.case_active = (None, None)
+
+    def calculer_deplacements_ou_controles_par_piece_active(self, conteneur, select):  # Calcul les déplacements possibles ou cases contrôlées par la pièce active en fonction de select
         act_x, act_y = self.case_active
+        proprietaire_piece_active = self.coups[act_x][act_y].proprietaire
 
         for direction in self.coups[act_x][act_y].deplacements:  # Les séparations des directions avec les différents tableaux de "deplacements" permet de gérer simplement les obstacles
             i = 0
             portee_piece = len(direction)
             # Avant obstacle
             while i < portee_piece and self.deplacement_dans_terrain(act_x, act_y, direction[i]) and \
-                  self.coups[act_x + direction[i][0]][act_y + direction[i][1]] == 0:  # Ne pas dépasser la portée des pièces ni le plateau PUIS "Tant que le chemin n'est pas bloqué par une pièce" (ordre important)
+                  self.coups[act_x + direction[i][0]][act_y + direction[i][1]] is None:  # Ne pas dépasser la portée des pièces ni le plateau PUIS "Tant que le chemin n'est pas bloqué par une pièce" (ordre important)
                 if select == 1 or not isinstance(self.coups[act_x][act_y], Pion):  # Pion ne contrôle pas les cases en vertical
                     conteneur[act_x + direction[i][0]][act_y + direction[i][1]] = self.d_coups["oui"]
                 i += 1
@@ -136,9 +120,10 @@ class Plateau:
         if isinstance(self.coups[act_x][act_y], Pion):  # Attaques en diagonale des pions
             for attaque in self.coups[act_x][act_y].attaques:
                 if self.deplacement_dans_terrain(act_x, act_y, attaque[0]):
-                    if select == 2 or self.case_contient_piece_a(act_x + attaque[0][0], act_y + attaque[0][1],
-                                                                 adversaire) \
-                       or self.case_prise_en_passant == (act_x + attaque[0][0], act_y + attaque[0][1]):
+                    if select == 2 or (self.coups[act_x + attaque[0][0]][act_y + attaque[0][1]] is not None
+                                       and not self.case_contient_piece_a(act_x + attaque[0][0], act_y + attaque[0][1],
+                                                                          proprietaire_piece_active)) \
+                                   or self.case_prise_en_passant == (act_x + attaque[0][0], act_y + attaque[0][1]):
                         conteneur[act_x + attaque[0][0]][act_y + attaque[0][1]] = self.d_coups["oui"]
 
         # Roque
@@ -148,111 +133,52 @@ class Plateau:
                    self.coups[act_x + pos_tour][act_y].a_bouge:
                     piece_entre = False
                     for i in range(1 if pos_tour == 3 else -1, pos_tour, 1 if pos_tour == 3 else -1):
-                        if self.coups[act_x + i][act_y] != 0:
+                        if self.coups[act_x + i][act_y] is not None:
                             piece_entre = True
                     if select == 1 and not piece_entre:
                         conteneur[act_x + int(copysign(2, pos_tour))][act_y] = self.d_coups["roque"]
 
+    def calculer_cases_controlees_par(self, joueur):
+        for i in range(NB_COLONNES):
+            for j in range(NB_LIGNES):
+                if self.case_contient_piece_a(i, j, joueur):
+                    self.activer_piece(i, j)  # Changement temporaire de pièce active
+                    self.calculer_deplacements_ou_controles_par_piece_active(self.cases_controlees, 2)  # Au fur et à mesure, les cases contrôlées se surperposent et créées une map des cases contrôlées.
+
+        self.desactiver_piece_active()
+
+    def calculer_coups_possibles_piece_active(self, adversaire):
+        sauv_case_active = self.case_active
+
+        self.calculer_deplacements_ou_controles_par_piece_active(self.deplacements_possibles, 1)
+
+        for i in range(NB_COLONNES):
+            for j in range(NB_LIGNES):
+                if self.deplacements_possibles[i][j] in (self.d_coups["oui"], self.d_coups["roque"]):
+                    self.deplacement_fictif_piece_active(i, j, not bool(
+                        self.deplacements_possibles[i][j] != self.d_coups["roque"]))
+                    self.calculer_cases_controlees_par(adversaire)
+                    self.case_active = sauv_case_active
+                    pos_roi_allie_x = self.pos_roi_n[0] if self.coups[i][j].couleur != COULEUR_PIECE2 else \
+                                      self.pos_roi_b[0]
+                    pos_roi_allie_y = self.pos_roi_n[1] if self.coups[i][j].couleur != COULEUR_PIECE2 else \
+                                      self.pos_roi_b[1]
+                    if self.cases_controlees[pos_roi_allie_x][pos_roi_allie_y] == self.d_coups["non"]:
+                        if self.deplacements_possibles[i][j] != self.d_coups["roque"]:
+                            self.coups_possibles[i][j] = self.d_coups["oui"]
+                        elif self.cases_controlees[pos_roi_allie_x + int(copysign(1, 4 - pos_roi_allie_x))] \
+                                                  [pos_roi_allie_y] == self.d_coups["non"]:  # Les cases de passage du roi ne doivent pas être contrôlées
+                            self.coups_possibles[i][j] = self.d_coups["roque"]
+                    self.retour_deplacement_fictif(i, j, not bool(
+                        self.deplacements_possibles[i][j] != self.d_coups["roque"]))
+                    self.case_active = sauv_case_active
+                    self.effacer_cases_controlees()
+
+        self.effacer_deplacements_possibles()
+
     def deplacement_dans_terrain(self, act_x, act_y, direction):
         return True if act_x + direction[0] < NB_COLONNES and act_y + direction[1] < NB_LIGNES and \
                        act_x + direction[0] >= 0 and act_y + direction[1] >= 0 else False
-
-    def changer_couleur_coups_possibles(self):
-        for i in range(NB_COLONNES):
-            for j in range(NB_LIGNES):
-                if self.coups_possibles[i][j] == self.d_coups["oui"] or \
-                   self.coups_possibles[i][j] == self.d_coups["roque"]:
-                    self.damier.changer_couleur_case(i, j, COULEUR_COUP_POSSIBLE1 if (i + j) % 2 == 0
-                                                      else COULEUR_COUP_POSSIBLE2)
-
-    def desactiver_case_active(self):
-        self.damier.changer_couleur_case(self.case_active[0], self.case_active[1], COULEUR_DAMIER1
-                                         if (self.case_active[0] + self.case_active[1]) % 2 == 0 else COULEUR_DAMIER2)
-        self.case_active = (-1, -1)
-
-        self.effacer_coups_possibles()
-
-    def effacer_deplacements_possibles(self):
-        for i in range(NB_COLONNES):
-            for j in range(NB_LIGNES):
-                if self.deplacements_possibles[i][j] != self.d_coups["non"]:
-                    self.deplacements_possibles[i][j] = self.d_coups["non"]
-
-    def effacer_coups_possibles(self):
-        for i in range(NB_COLONNES):
-            for j in range(NB_LIGNES):
-                if self.coups_possibles[i][j] != self.d_coups["non"]:
-                    self.coups_possibles[i][j] = self.d_coups["non"]
-                    self.damier.changer_couleur_case(i, j, COULEUR_DAMIER1 if (i + j) % 2 == 0 else COULEUR_DAMIER2)
-
-    def jouer_coup(self, case_x, case_y, roque):
-        self.deplacer_piece_active(case_x, case_y)
-        self.gerer_deplacement_pions(case_x, case_y)
-        self.desactiver_case_active()
-        self.gerer_choses_relatives_au_roi(case_x, case_y, roque)
-
-    def deplacer_piece_active(self, case_x, case_y):
-        # Effacement image pièce mangée
-        self.effacer_image(case_x, case_y)
-        # Déplacement de l'objet
-        self.deplacer_piece_tableau(self.case_active[0], self.case_active[1], case_x, case_y)
-        # Déplacement de l'image
-        self.recentrer_image_piece_sur_case(case_x, case_y)
-
-    def effacer_image(self, case_x, case_y):
-        if self.coups[case_x][case_y] != 0:
-            main_canvas.delete(self.coups[case_x][case_y].image_canvas)  # Un objet de canvas existe toujours même si il n'est plus référencé.
-                                                                         # Il faut donc le détruire manuellement. Il est par contre inutile de
-                                                                         # faire quoi que ce soit pour image_tk qui se détruit quand elle n'est
-                                                                         # plus référencée.
-
-    def deplacer_piece_tableau(self, case_x_init, case_y_init, case_x_fin, case_y_fin):
-        self.coups[case_x_fin][case_y_fin] = self.coups[case_x_init][case_y_init]
-        self.coups[case_x_init][case_y_init] = 0
-
-    def recentrer_image_piece_sur_case(self, case_x, case_y):
-        x, y = (case_x + 1 / 2) * LARGEUR / NB_COLONNES, (case_y + 1 / 2) * HAUTEUR / NB_LIGNES
-        main_canvas.coords(self.coups[case_x][case_y].image_canvas, x, y)
-
-    def gerer_deplacement_pions(self, case_x, case_y):  # Réduction portée pions après 1er déplacement + double pas + prise en passant + promotion
-        prise_en_passant_possible_ce_tour = False
-        if isinstance(self.coups[case_x][case_y], Pion):
-            if case_y in (0, 7):  # Promotion
-                self.promotion_pion(case_x, case_y, self.coups[case_x][case_y].couleur,
-                                    self.coups[case_x][case_y].proprietaire)
-            elif not self.coups[case_x][case_y].a_bouge:  # Réduction portée + activation propre prise en passant
-                if case_y == 3 or case_y == 4:
-                    self.case_prise_en_passant = (case_x, int((self.case_active[1]+case_y)/2))
-                    prise_en_passant_possible_ce_tour = True
-                self.coups[case_x][case_y].deplacements = [[(0, 1)]] if self.coups[case_x][case_y].couleur == \
-                                                                        COULEUR_PIECE2 else [[(0, -1)]]
-                self.coups[case_x][case_y].a_bouge = True
-            elif self.case_prise_en_passant == (case_x, case_y):  # Prise adverse en passant
-                self.effacer_image(case_x, case_y+1 if case_y == 2 else case_y-1)
-                self.coups[case_x][case_y+1 if case_y == 2 else case_y-1] = 0
-        if not prise_en_passant_possible_ce_tour:
-            self.case_prise_en_passant = (-1, -1)
-
-    def gerer_choses_relatives_au_roi(self, case_x, case_y, roque):  # Pour le roque + modif pos roi
-        if isinstance(self.coups[case_x][case_y], Tour):
-            self.coups[case_x][case_y].a_bouge = True
-        if isinstance(self.coups[case_x][case_y], Roi):
-            self.coups[case_x][case_y].a_bouge = True
-            if self.coups[case_x][case_y].couleur == COULEUR_PIECE2:
-                self.pos_roi_b = (case_x, case_y)
-            else:
-                self.pos_roi_n = (case_x, case_y)
-
-        if roque:
-            self.case_active = (case_x + 1 if case_x == 6 else case_x - 2, case_y)  # On active la tour concernée
-            self.jouer_coup(case_x - 1 if case_x == 6 else case_x + 1, case_y, False)
-    def promotion_pion(self, case_x, case_y, couleur, proprietaire):
-        promotion = Promotion(main_window, couleur, proprietaire)
-        main_window.wait_window(promotion.window_promotion)  # Tant que la fenêtre enfant n'est pas fermée, le programme est retenu ici
-        main_canvas.delete(self.coups[case_x][case_y].image_canvas)
-        self.coups[case_x][case_y] = promotion.choix_piece
-        x, y = (case_x + 1 / 2) * LARGEUR / NB_COLONNES, (case_y + 1 / 2) * HAUTEUR / NB_LIGNES
-        self.coups[case_x][case_y].recreer_image(main_canvas, x, y)  # Une image dans un canvas détruit est détruite. On la reconstruit dans la canvas principal.
 
     def deplacement_fictif_piece_active(self, case_x, case_y, roque):
         # Sauvegarde pièce mangée
@@ -269,7 +195,7 @@ class Plateau:
                 self.pos_roi_n = (case_x, case_y)
 
         if roque:
-            self.case_active = (case_x + 1 if case_x == 6 else case_x - 2, case_y)  # On active la tour concernée
+            self.activer_piece(case_x + 1 if case_x == 6 else case_x - 2, case_y)  # On active la tour concernée
             self.deplacement_fictif_piece_active(case_x - 1 if case_x == 6 else case_x + 1, case_y, False)
 
     def retour_deplacement_fictif(self, case_x, case_y, roque):
@@ -288,21 +214,114 @@ class Plateau:
             self.case_active = (case_x + 1 if case_x == 6 else case_x - 2, case_y)  # On active la tour concernée
             self.retour_deplacement_fictif(case_x - 1 if case_x == 6 else case_x + 1, case_y, False)
 
-    def calculer_cases_controlees_par(self, joueur, adversaire):
+    def deplacer_piece_tableau(self, case_x_init, case_y_init, case_x_fin, case_y_fin):
+        self.coups[case_x_fin][case_y_fin] = self.coups[case_x_init][case_y_init]
+        self.coups[case_x_init][case_y_init] = None
+
+    def jouer_coup(self, case_x, case_y, roque):
+        self.deplacer_piece_active(case_x, case_y)
+        self.gerer_deplacement_pions(case_x, case_y)
+        self.deselectionner_piece_active()
+        self.gerer_choses_relatives_au_roi(case_x, case_y, roque)
+
+    def deplacer_piece_active(self, case_x, case_y):
+        # Effacement image pièce mangée
+        self.effacer_image(case_x, case_y)
+        # Déplacement de l'objet
+        self.deplacer_piece_tableau(self.case_active[0], self.case_active[1], case_x, case_y)
+        # Déplacement de l'image
+        self.recentrer_image_piece_sur_case(case_x, case_y)
+
+    def gerer_deplacement_pions(self, case_x, case_y):  # Réduction portée pions après 1er déplacement + double pas + prise en passant + promotion
+        prise_en_passant_possible_ce_tour = False
+        if isinstance(self.coups[case_x][case_y], Pion):
+            if case_y in (0, 7):  # Promotion
+                self.promotion_pion(case_x, case_y, self.coups[case_x][case_y].couleur,
+                                    self.coups[case_x][case_y].proprietaire)
+            elif not self.coups[case_x][case_y].a_bouge:  # Réduction portée + activation propre prise en passant
+                if case_y == 3 or case_y == 4:
+                    self.case_prise_en_passant = (case_x, int((self.case_active[1]+case_y)/2))
+                    prise_en_passant_possible_ce_tour = True
+                self.coups[case_x][case_y].deplacements = [[(0, 1)]] if self.coups[case_x][case_y].couleur == \
+                                                                        COULEUR_PIECE2 else [[(0, -1)]]
+                self.coups[case_x][case_y].a_bouge = True
+            elif self.case_prise_en_passant == (case_x, case_y):  # Prise adverse en passant
+                self.effacer_image(case_x, case_y+1 if case_y == 2 else case_y-1)
+                self.coups[case_x][case_y+1 if case_y == 2 else case_y-1] = None
+        if not prise_en_passant_possible_ce_tour:
+            self.case_prise_en_passant = (None, None)
+
+    def gerer_choses_relatives_au_roi(self, case_x, case_y, roque):  # Pour le roque + modif pos roi
+        if isinstance(self.coups[case_x][case_y], Tour):
+            self.coups[case_x][case_y].a_bouge = True
+        if isinstance(self.coups[case_x][case_y], Roi):
+            self.coups[case_x][case_y].a_bouge = True
+            if self.coups[case_x][case_y].couleur == COULEUR_PIECE2:
+                self.pos_roi_b = (case_x, case_y)
+            else:
+                self.pos_roi_n = (case_x, case_y)
+
+        if roque:
+            self.case_active = (case_x + 1 if case_x == 6 else case_x - 2, case_y)  # On active la tour concernée
+            self.jouer_coup(case_x - 1 if case_x == 6 else case_x + 1, case_y, False)
+
+    def effacer_image(self, case_x, case_y):
+        if self.coups[case_x][case_y] is not None:
+            main_canvas.delete(self.coups[case_x][case_y].image_canvas)  # Un objet de canvas existe toujours même si il n'est plus référencé.
+                                                                         # Il faut donc le détruire manuellement. Il est par contre inutile de
+                                                                         # faire quoi que ce soit pour image_tk qui se détruit quand elle n'est
+                                                                         # plus référencée.
+
+    def recentrer_image_piece_sur_case(self, case_x, case_y):
+        x, y = (case_x + 1 / 2) * LARGEUR / NB_COLONNES, (case_y + 1 / 2) * HAUTEUR / NB_LIGNES
+        main_canvas.coords(self.coups[case_x][case_y].image_canvas, x, y)
+
+    def promotion_pion(self, case_x, case_y, couleur, proprietaire):
+        promotion = Promotion(main_window, couleur, proprietaire)
+        main_window.wait_window(promotion.window_promotion)  # Tant que la fenêtre enfant n'est pas fermée, le programme est retenu ici
+        main_canvas.delete(self.coups[case_x][case_y].image_canvas)
+        self.coups[case_x][case_y] = promotion.choix_piece
+        x, y = (case_x + 1 / 2) * LARGEUR / NB_COLONNES, (case_y + 1 / 2) * HAUTEUR / NB_LIGNES
+        self.coups[case_x][case_y].recreer_image(main_canvas, x, y)  # Une image dans un canvas détruit est détruite. On la reconstruit dans la canvas principal.
+
+    def effacer_deplacements_possibles(self):
         for i in range(NB_COLONNES):
             for j in range(NB_LIGNES):
-                if self.coups[i][j] != 0 and self.coups[i][j].proprietaire == joueur:
-                    self.case_active = (i, j)  # Changement temporaire de case_active
-                    self.calculer_deplacements_ou_controles_par_piece_active(joueur, adversaire, self.cases_controlees,
-                                                                             2) # Au fur et à mesure, les cases contrôlées se surperposent et créées une map des cases contrôlées.
-
-        self.case_active = (-1, -1)
+                if self.deplacements_possibles[i][j] != self.d_coups["non"]:
+                    self.deplacements_possibles[i][j] = self.d_coups["non"]
 
     def effacer_cases_controlees(self):
         for i in range(NB_COLONNES):
             for j in range(NB_LIGNES):
                 if self.cases_controlees[i][j] != self.d_coups["non"]:
                     self.cases_controlees[i][j] = self.d_coups["non"]
+
+    def effacer_tableau_coups_possibles(self):
+        for i in range(NB_COLONNES):
+            for j in range(NB_LIGNES):
+                if self.coups_possibles[i][j] != self.d_coups["non"]:
+                    self.coups_possibles[i][j] = self.d_coups["non"]
+
+    def changer_couleur_case_active(self):
+        self.damier.changer_couleur_case(self.case_active[0], self.case_active[1], COULEUR_CASE_ACTIVE)
+
+    def changer_couleur_coups_possibles(self):
+        for i in range(NB_COLONNES):
+            for j in range(NB_LIGNES):
+                if self.coups_possibles[i][j] == self.d_coups["oui"] or \
+                   self.coups_possibles[i][j] == self.d_coups["roque"]:
+                    self.damier.changer_couleur_case(i, j, COULEUR_COUP_POSSIBLE1 if (i + j) % 2 == 0
+                                                      else COULEUR_COUP_POSSIBLE2)
+
+    def reset_couleur_case_active(self):
+        self.damier.changer_couleur_case(self.case_active[0], self.case_active[1], COULEUR_DAMIER1
+                                         if (self.case_active[0] + self.case_active[1]) % 2 == 0 else COULEUR_DAMIER2)
+
+    def reset_couleur_coups_possibles(self):
+        for i in range(NB_COLONNES):
+            for j in range(NB_LIGNES):
+                if self.coups_possibles[i][j] != self.d_coups["non"]:
+                    self.damier.changer_couleur_case(i, j, COULEUR_DAMIER1 if (i + j) % 2 == 0 else COULEUR_DAMIER2)
 
     def reset(self):
         # Damier
@@ -311,19 +330,20 @@ class Plateau:
         # Images pions
         for i in range(NB_COLONNES):
             for j in range(NB_LIGNES):
-                if self.coups[i][j] != 0:
+                if self.coups[i][j] is not None:
                     main_canvas.delete(self.coups[i][j].image_canvas)  # Un objet de canvas existe toujours même si il n'est plus référencé.
                                                                        # Il faut donc le détruire manuellement. Il est par contre inutile de
                                                                        # faire quoi que ce soit pour image_tk qui se détruit quand elle n'est
                                                                        # plus référencée.
 
         # Attributs
-        self.coups = [[0] * NB_LIGNES for _ in self.coups]
+        self.coups = [[None] * NB_LIGNES for _ in self.coups]
+        self.coups_possibles = [[None] * NB_LIGNES for _ in self.coups]
         self.generer_pieces()
-        self.case_active = (-1, -1)
-        self.case_prise_en_passant = (-1, -1)
+        self.case_active = (None, None)
+        self.case_prise_en_passant = (None, None)
         self.pos_roi_b, self.pos_roi_n = (4, 0), (4, 7)
-        self.sauv_piece_mangee_fictivement = 0
+        self.sauv_piece_mangee_fictivement = None
 
 
 class GestionnaireConditionsVictoire:
@@ -337,33 +357,35 @@ class GestionnaireConditionsVictoire:
 
     def gestion_menaces_roi(self, joueur_actif, adversaire):
         if not self.adversaire_a_coup_possible(joueur_actif, adversaire):
-            if self.adversaire_en_echec(joueur_actif, adversaire):
+            if self.adversaire_en_echec(joueur_actif):
                 self.gestionnaire_fin_jeu.arreter_jeu(GestionnaireFinJeu.VICTOIRE)
             else:
                 self.gestionnaire_fin_jeu.arreter_jeu(GestionnaireFinJeu.PAT)
-        plateau.desactiver_case_active()
 
     def adversaire_a_coup_possible(self, joueur_actif, adversaire):
         for i in range(NB_COLONNES):
             for j in range(NB_LIGNES):
                 if plateau.case_contient_piece_a(i, j, adversaire):
-                    if self.piece_a_coup_possible(i, j, joueur_actif, adversaire):
+                    if self.piece_a_coup_possible(i, j, joueur_actif):
                         return True
         return False
 
-    def piece_a_coup_possible(self, x, y, joueur_actif, adversaire):
-        plateau.activer_case(x, y, adversaire, joueur_actif)
+    def piece_a_coup_possible(self, case_x, case_y, joueur_actif):
+        plateau.activer_piece(case_x, case_y)
+        plateau.calculer_coups_possibles_piece_active(joueur_actif)
         for i in range(NB_COLONNES):
             for j in range(NB_LIGNES):
                 if plateau.coups_possibles[i][j] != plateau.d_coups["non"]:
-                    plateau.desactiver_case_active()
+                    plateau.desactiver_piece_active()
+                    plateau.effacer_tableau_coups_possibles()
                     return True
-        plateau.desactiver_case_active()
+        plateau.desactiver_piece_active()
+        plateau.effacer_tableau_coups_possibles()
         return False
 
-    def adversaire_en_echec(self, joueur_actif, adversaire):
+    def adversaire_en_echec(self, joueur_actif):
         roi_adverse_x, roi_adverse_y = plateau.pos_roi_n if joueur_actif == 1 else plateau.pos_roi_b
-        plateau.calculer_cases_controlees_par(joueur_actif, adversaire)
+        plateau.calculer_cases_controlees_par(joueur_actif)
         if plateau.cases_controlees[roi_adverse_x][roi_adverse_y] != plateau.d_coups["non"]:
             plateau.effacer_cases_controlees()
             return True
@@ -435,7 +457,6 @@ class Jeu:
 
         # Attributs
         self.joueur_actif = 1
-        self.symbole_actif = "X"
         self.nb_tours = 1
 
         # Infos de jeu
@@ -449,11 +470,10 @@ class Jeu:
         # Clic gauche
         if evt.num == 1:
             adversaire = self.joueur_actif % 2 + 1
-            if plateau.case_active == (-1, -1):
-                case_x, case_y = int(evt.x * NB_COLONNES // LARGEUR), int(evt.y * NB_LIGNES / HAUTEUR)
-                plateau.activer_case(case_x, case_y, self.joueur_actif, adversaire)
+            case_x, case_y = int(evt.x * NB_COLONNES // LARGEUR), int(evt.y * NB_LIGNES / HAUTEUR)
+            if plateau.case_active == (None, None):
+                plateau.selectionner_piece(case_x, case_y, self.joueur_actif, adversaire)
             else:
-                case_x, case_y = int(evt.x * NB_COLONNES // LARGEUR), int(evt.y * NB_LIGNES / HAUTEUR)
                 if plateau.coups_possibles[case_x][case_y] == plateau.d_coups["oui"]:
                     plateau.jouer_coup(case_x, case_y, False)
                     self.gestionnaire_conditions_victoire.gerer_conditions_victoire(self.joueur_actif, adversaire)
@@ -463,7 +483,7 @@ class Jeu:
                     self.gestionnaire_conditions_victoire.gerer_conditions_victoire(self.joueur_actif, adversaire)
                     self.maj_infos()
                 else:
-                    plateau.desactiver_case_active()
+                    plateau.deselectionner_piece_active()
 
     def maj_infos(self):
         if self.gestionnaire_conditions_victoire.gestionnaire_fin_jeu.etat_jeu == GestionnaireFinJeu.VICTOIRE:
@@ -484,8 +504,6 @@ class Jeu:
 
         self.joueur_actif = 1
         self.nb_tours = 1
-        self.victoire = False
-        self.pat = False
 
         self.infos.config(text=f"Tour {self.nb_tours} - Au joueur {self.joueur_actif} de jouer", fg="black")
 
