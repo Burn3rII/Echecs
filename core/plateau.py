@@ -1,21 +1,14 @@
-# TODO
-#   Gestionnaire d'erreurs (par exemple pour maj_infos)
-#   Fonction temps
-#   Autres fonctions
-#   Améliorer graphiques
-
 ### Bibliothèques ######################################################################################################
 ### Externes ###
-import tkinter as tk
 from math import copysign
 import hashlib
 import pickle
 ### Fichiers internes ###
-from damier import Damier
-from promotion import Promotion
 from pieces import Pion, Tour, Cavalier, Fou, Reine, Roi
+from promotion import Promotion
 ### Paramètres de jeu ###
-from constantes import *
+from core.constantes import NB_LIGNES, NB_COLONNES, LARGEUR, HAUTEUR, COULEUR_DAMIER1, COULEUR_DAMIER2, COULEUR_PIECE1, \
+                       COULEUR_PIECE2, COULEUR_CASE_ACTIVE, COULEUR_COUP_POSSIBLE1, COULEUR_COUP_POSSIBLE2
 
 ### Classes ############################################################################################################
 
@@ -23,9 +16,9 @@ from constantes import *
 class Plateau:
     """Gestion des pièces"""
 
-    def __init__(self):
-        # Damier
-        self.damier = Damier(main_canvas, NB_COLONNES, NB_LIGNES, LARGEUR, HAUTEUR)
+    def __init__(self, gui):
+        # Interface utilisateur
+        self.gui = gui
 
         # Dictionnaire des coups
         self.d_coups = {"non": 0, "oui": 1, "roque": 2}
@@ -61,24 +54,25 @@ class Plateau:
         for i in range(NB_COLONNES):
             for j in indices_lignes:
                 if j in (1, NB_LIGNES - 2):
-                    self.coups[i][j] = Pion(main_canvas, NB_COLONNES, NB_LIGNES, 1 if j == 1 else 2,
-                                            COULEUR_PIECE2 if j == 1 else COULEUR_PIECE1, i, j)
+                    self.coups[i][j] = Pion(self.gui.canvas, NB_COLONNES, NB_LIGNES,
+                                            1 if j == 1 else 2, COULEUR_PIECE2 if j == 1 else COULEUR_PIECE1, i, j)
                 elif j in (0, NB_LIGNES - 1):
                     if i in (0, NB_COLONNES - 1):
-                        self.coups[i][j] = Tour(main_canvas, NB_COLONNES, NB_LIGNES, 1 if j == 0 else 2,
-                                                COULEUR_PIECE2 if j == 0 else COULEUR_PIECE1, i, j)
+                        self.coups[i][j] = Tour(self.gui.canvas, NB_COLONNES, NB_LIGNES,
+                                                1 if j == 0 else 2, COULEUR_PIECE2 if j == 0 else COULEUR_PIECE1, i, j)
                     elif i in (1, NB_COLONNES - 2):
-                        self.coups[i][j] = Cavalier(main_canvas, NB_COLONNES, NB_LIGNES, 1 if j == 0 else 2,
-                                                    COULEUR_PIECE2 if j == 0 else COULEUR_PIECE1, i, j)
+                        self.coups[i][j] = Cavalier(self.gui.canvas, NB_COLONNES, NB_LIGNES,
+                                                    1 if j == 0 else 2, COULEUR_PIECE2 if j == 0 else COULEUR_PIECE1,
+                                                    i, j)
                     elif i in (2, NB_COLONNES - 3):
-                        self.coups[i][j] = Fou(main_canvas, NB_COLONNES, NB_LIGNES, 1 if j == 0 else 2,
-                                               COULEUR_PIECE2 if j == 0 else COULEUR_PIECE1, i, j)
+                        self.coups[i][j] = Fou(self.gui.canvas, NB_COLONNES, NB_LIGNES,
+                                               1 if j == 0 else 2, COULEUR_PIECE2 if j == 0 else COULEUR_PIECE1, i, j)
                     elif i == 3:
-                        self.coups[i][j] = Reine(main_canvas, NB_COLONNES, NB_LIGNES, 1 if j == 0 else 2,
-                                                 COULEUR_PIECE2 if j == 0 else COULEUR_PIECE1, i, j)
+                        self.coups[i][j] = Reine(self.gui.canvas, NB_COLONNES, NB_LIGNES,
+                                                 1 if j == 0 else 2, COULEUR_PIECE2 if j == 0 else COULEUR_PIECE1, i, j)
                     elif i == NB_COLONNES - 4:
-                        self.coups[i][j] = Roi(main_canvas, NB_COLONNES, NB_LIGNES, 1 if j == 0 else 2,
-                                               COULEUR_PIECE2 if j == 0 else COULEUR_PIECE1, i, j)
+                        self.coups[i][j] = Roi(self.gui.canvas, NB_COLONNES, NB_LIGNES,
+                                               1 if j == 0 else 2, COULEUR_PIECE2 if j == 0 else COULEUR_PIECE1, i, j)
 
     def case_contient_piece_a(self, case_x, case_y, joueur):
         if self.coups[case_x][case_y] is not None and self.coups[case_x][case_y].proprietaire == joueur:
@@ -287,22 +281,21 @@ class Plateau:
 
     def effacer_image(self, case_x, case_y):
         if self.coups[case_x][case_y] is not None:
-            main_canvas.delete(self.coups[case_x][case_y].image_canvas)  # Un objet de canvas existe toujours même si il n'est plus référencé.
-                                                                         # Il faut donc le détruire manuellement. Il est par contre inutile de
-                                                                         # faire quoi que ce soit pour image_tk qui se détruit quand elle n'est
-                                                                         # plus référencée.
+            self.gui.effacer_objet_canvas(self.coups[case_x][case_y].image_canvas)  # Un objet de canvas existe toujours
+            # même s'il n'est plus référencé. Il faut donc le détruire manuellement. Il est par contre inutile de faire
+            # quoi que ce soit pour image_tk qui se détruit quand elle n'est plus référencée.
 
     def recentrer_image_piece_sur_case(self, case_x, case_y):
         x, y = (case_x + 1 / 2) * LARGEUR / NB_COLONNES, (case_y + 1 / 2) * HAUTEUR / NB_LIGNES
-        main_canvas.coords(self.coups[case_x][case_y].image_canvas, x, y)
+        self.gui.deplacer_objet_canvas(self.coups[case_x][case_y].image_canvas, x, y)
 
     def promotion_pion(self, case_x, case_y, couleur, proprietaire):
-        promotion = Promotion(main_window, couleur, proprietaire)
-        main_window.wait_window(promotion.window_promotion)  # Tant que la fenêtre enfant n'est pas fermée, le programme est retenu ici
-        main_canvas.delete(self.coups[case_x][case_y].image_canvas)
+        promotion = Promotion(self.gui.window, couleur, proprietaire)
+        self.gui.window.wait_window(promotion.gui.window)  # Tant que la fenêtre enfant n'est pas fermée, le programme est retenu ici
+        self.gui.canvas.delete(self.coups[case_x][case_y].image_canvas)
         self.coups[case_x][case_y] = promotion.choix_piece
         x, y = (case_x + 1 / 2) * LARGEUR / NB_COLONNES, (case_y + 1 / 2) * HAUTEUR / NB_LIGNES
-        self.coups[case_x][case_y].recreer_image(main_canvas, x, y)  # Une image dans un canvas détruit est détruite. On la reconstruit dans la canvas principal.
+        self.coups[case_x][case_y].recreer_image(self.gui.canvas, x, y)  # Une image dans un canvas détruit est détruite. On la reconstruit dans la canvas principal.
 
     def desactiver_roque_tours_alliees(self, joueur):
         """Sert pour le calcul de l'état du plateau. En effet, si le roi bouge, comme l'état du plateau comprend les
@@ -340,29 +333,29 @@ class Plateau:
         self.sauv_etats_plateau = []
 
     def changer_couleur_case_active(self):
-        self.damier.changer_couleur_case(self.case_active[0], self.case_active[1], COULEUR_CASE_ACTIVE)
+        self.gui.damier.changer_couleur_case(self.case_active[0], self.case_active[1], COULEUR_CASE_ACTIVE)
 
     def changer_couleur_coups_possibles(self):
         for i in range(NB_COLONNES):
             for j in range(NB_LIGNES):
                 if self.coups_possibles[i][j] == self.d_coups["oui"] or \
                    self.coups_possibles[i][j] == self.d_coups["roque"]:
-                    self.damier.changer_couleur_case(i, j, COULEUR_COUP_POSSIBLE1 if (i + j) % 2 == 0
+                    self.gui.damier.changer_couleur_case(i, j, COULEUR_COUP_POSSIBLE1 if (i + j) % 2 == 0
                                                       else COULEUR_COUP_POSSIBLE2)
 
     def reset_couleur_case_active(self):
-        self.damier.changer_couleur_case(self.case_active[0], self.case_active[1], COULEUR_DAMIER1
+        self.gui.damier.changer_couleur_case(self.case_active[0], self.case_active[1], COULEUR_DAMIER1
                                          if (self.case_active[0] + self.case_active[1]) % 2 == 0 else COULEUR_DAMIER2)
 
     def reset_couleur_coups_possibles(self):
         for i in range(NB_COLONNES):
             for j in range(NB_LIGNES):
                 if self.coups_possibles[i][j] != self.d_coups["non"]:
-                    self.damier.changer_couleur_case(i, j, COULEUR_DAMIER1 if (i + j) % 2 == 0 else COULEUR_DAMIER2)
+                    self.gui.damier.changer_couleur_case(i, j, COULEUR_DAMIER1 if (i + j) % 2 == 0 else COULEUR_DAMIER2)
 
     def reset(self):
         # Damier
-        self.damier.reset()
+        self.gui.damier.reset()
 
         # Images pions
         for i in range(NB_COLONNES):
@@ -380,228 +373,3 @@ class Plateau:
         self.pion_bouge_ce_tour = False
         self.piece_mangee_ce_tour = False
         self.effacer_sauv_etats_plateau()
-
-
-class GestionnaireConditionsVictoire:
-    def __init__(self):
-        # Gestionnaire état du jeu
-        self.gestionnaire_fin_jeu = GestionnaireFinJeu()
-
-        # Conditions de victoire
-        self.compteur_tours_sans_evolution = 0
-
-    def gerer_conditions_victoire(self, joueur_actif, adversaire):
-        self.gestion_manque_materiel(joueur_actif)
-        self.gestion_50_tours_sans_evolution()
-        self.gestion_3x_meme_position(joueur_actif)
-        self.gestion_menaces_roi(joueur_actif, adversaire)
-
-    def gestion_manque_materiel(self, joueur):
-        if self.manque_materiel(joueur):
-            self.gestionnaire_fin_jeu.arreter_jeu(GestionnaireFinJeu.MANQUE_MATERIEL)
-
-    def manque_materiel(self, joueur1):
-        compteur_fous_joueur1 = 0
-        compteur_cavaliers_joueur1 = 0
-        compteur_fous_joueur2 = 0
-        compteur_cavaliers_joueur2 = 0
-        for i in range(NB_COLONNES):
-            for j in range(NB_LIGNES):
-                if isinstance(plateau.coups[i][j], (Pion, Tour, Reine)):
-                    return False
-                elif isinstance(plateau.coups[i][j], Fou):
-                    if plateau.coups[i][j].proprietaire == joueur1:
-                        compteur_fous_joueur1 += 1
-                    else:
-                        compteur_fous_joueur2 += 1
-                elif isinstance(plateau.coups[i][j], Cavalier):
-                    if plateau.coups[i][j].proprietaire == joueur1:
-                        compteur_cavaliers_joueur1 += 1
-                    else:
-                        compteur_cavaliers_joueur2 += 1
-
-                if compteur_fous_joueur1 > 1 or compteur_fous_joueur2 > 1 \
-                   or compteur_fous_joueur1+compteur_fous_joueur2 > 2 \
-                   or compteur_cavaliers_joueur1+compteur_cavaliers_joueur2 > 2:
-                    return False
-        return True
-
-    def gestion_50_tours_sans_evolution(self):
-        self.maj_nb_tours_sans_evolution()
-        if self.compteur_tours_sans_evolution > 49:
-            self.gestionnaire_fin_jeu.arreter_jeu(GestionnaireFinJeu.CINQUANTE_TOURS_SANS_EVOLUTION)
-
-    def maj_nb_tours_sans_evolution(self):
-        if plateau.piece_mangee_ce_tour or plateau.pion_bouge_ce_tour:
-            self.compteur_tours_sans_evolution = 0
-        else:
-            self.compteur_tours_sans_evolution += 1
-
-    def gestion_3x_meme_position(self, joueur_actif):
-        if self.compteur_tours_sans_evolution == 0:  # Si une évolution a eu lieu, on ne pourra pas retrouver de positions précédentes
-            plateau.effacer_sauv_etats_plateau()
-        plateau.sauvegarder_etat_plateau(joueur_actif)
-        if self.trois_fois_meme_position():
-            self.gestionnaire_fin_jeu.arreter_jeu(GestionnaireFinJeu.TROIS_FOIS_MEME_POSITION)
-
-    def trois_fois_meme_position(self):
-        plateau.sauv_etats_plateau = sorted(plateau.sauv_etats_plateau)  # Tri du tableau par ordre alphabétique
-        for i in range(len(plateau.sauv_etats_plateau) - 2):
-            if plateau.sauv_etats_plateau[i] == plateau.sauv_etats_plateau[i + 1] == plateau.sauv_etats_plateau[i + 2]:
-                return True
-        return False
-
-    def gestion_menaces_roi(self, joueur_actif, adversaire):
-        if not self.adversaire_a_coup_possible(joueur_actif, adversaire):
-            if self.adversaire_en_echec(joueur_actif):
-                self.gestionnaire_fin_jeu.arreter_jeu(GestionnaireFinJeu.VICTOIRE)
-            else:
-                self.gestionnaire_fin_jeu.arreter_jeu(GestionnaireFinJeu.PAT)
-
-    def adversaire_a_coup_possible(self, joueur_actif, adversaire):
-        for i in range(NB_COLONNES):
-            for j in range(NB_LIGNES):
-                if plateau.case_contient_piece_a(i, j, adversaire):
-                    if self.piece_a_coup_possible(i, j, joueur_actif):
-                        return True
-        return False
-
-    def piece_a_coup_possible(self, case_x, case_y, joueur_actif):
-        plateau.activer_piece(case_x, case_y)
-        plateau.calculer_coups_possibles_piece_active(joueur_actif)
-        for i in range(NB_COLONNES):
-            for j in range(NB_LIGNES):
-                if plateau.coups_possibles[i][j] != plateau.d_coups["non"]:
-                    plateau.desactiver_piece_active()
-                    plateau.effacer_tableau_coups_possibles()
-                    return True
-        plateau.desactiver_piece_active()
-        plateau.effacer_tableau_coups_possibles()
-        return False
-
-    def adversaire_en_echec(self, joueur_actif):
-        roi_adverse_x, roi_adverse_y = plateau.pos_roi_n if joueur_actif == 1 else plateau.pos_roi_b
-        plateau.calculer_cases_controlees_par(joueur_actif)
-        if plateau.cases_controlees[roi_adverse_x][roi_adverse_y] != plateau.d_coups["non"]:
-            plateau.effacer_cases_controlees()
-            return True
-        plateau.effacer_cases_controlees()
-        return False
-
-    def reset(self):
-        self.gestionnaire_fin_jeu.reset()
-
-
-class GestionnaireFinJeu:
-    """Gestion état du jeu"""
-
-    JEU_CONTINUE = 0
-    VICTOIRE = 1
-    MANQUE_TEMPS = 2
-    MANQUE_MATERIEL = 3
-    PAT = 4
-    TROIS_FOIS_MEME_POSITION = 5
-    CINQUANTE_TOURS_SANS_EVOLUTION = 6
-
-    def __init__(self):
-        self.etat_jeu = GestionnaireFinJeu.JEU_CONTINUE
-
-    def arreter_jeu(self, nouvel_etat_jeu):
-        self.etat_jeu = nouvel_etat_jeu
-        main_canvas.unbind("<1>")
-
-    def reset(self):
-        self.etat_jeu = GestionnaireFinJeu.JEU_CONTINUE
-
-
-class Jeu:
-    """Gestion générale du jeu"""
-
-    def __init__(self):
-        # Binding
-        main_canvas.bind("<1>", self.gestion_souris)
-
-        # Attributs
-        self.joueur_actif = 1
-        self.nb_tours = 1
-
-        # Infos de jeu
-        self.infos = tk.Label(main_window, text=f"Tour {self.nb_tours} - Au joueur {self.joueur_actif} de jouer")
-        self.infos.grid(row=1, column=0, columnspan=2)
-
-        # Gestionnaire fin de jeu
-        self.gestionnaire_conditions_victoire = GestionnaireConditionsVictoire()
-
-    def gestion_souris(self, evt):
-        # Clic gauche
-        if evt.num == 1:
-            adversaire = self.joueur_actif % 2 + 1
-            case_x, case_y = int(evt.x * NB_COLONNES // LARGEUR), int(evt.y * NB_LIGNES / HAUTEUR)
-            if plateau.case_active == (None, None):
-                plateau.selectionner_piece(case_x, case_y, self.joueur_actif, adversaire)
-            else:
-                if plateau.coups_possibles[case_x][case_y] == plateau.d_coups["oui"]:
-                    plateau.jouer_coup(case_x, case_y, False)
-                    self.gestionnaire_conditions_victoire.gerer_conditions_victoire(self.joueur_actif, adversaire)
-                    self.maj_infos()
-                elif plateau.coups_possibles[case_x][case_y] == plateau.d_coups["roque"]:
-                    plateau.jouer_coup(case_x, case_y, True)
-                    self.gestionnaire_conditions_victoire.gerer_conditions_victoire(self.joueur_actif, adversaire)
-                    self.maj_infos()
-                else:
-                    plateau.deselectionner_piece_active()
-
-    def maj_infos(self):
-        if self.gestionnaire_conditions_victoire.gestionnaire_fin_jeu.etat_jeu == GestionnaireFinJeu.JEU_CONTINUE:
-            self.joueur_actif = self.joueur_actif % 2 + 1
-            self.nb_tours += 1
-            self.infos.config(text=f"Tour {self.nb_tours} - Au joueur {self.joueur_actif} de jouer")
-        elif self.gestionnaire_conditions_victoire.gestionnaire_fin_jeu.etat_jeu == GestionnaireFinJeu.VICTOIRE:
-            self.infos.config(text=f"Victoire joueur {self.joueur_actif}", fg="red")
-        elif self.gestionnaire_conditions_victoire.gestionnaire_fin_jeu.etat_jeu == GestionnaireFinJeu.PAT:
-            self.infos.config(text="Égalité par pat", fg="red")
-        elif self.gestionnaire_conditions_victoire.gestionnaire_fin_jeu.etat_jeu == GestionnaireFinJeu.MANQUE_MATERIEL:
-            self.infos.config(text="Égalité par manque de matériel", fg="red")
-        elif self.gestionnaire_conditions_victoire.gestionnaire_fin_jeu.etat_jeu == \
-                GestionnaireFinJeu.CINQUANTE_TOURS_SANS_EVOLUTION:
-            self.infos.config(text="Égalité car les 50 derniers coups consécutifs ont été joués par chaque joueur sans "
-                                   "mouvement de pion ni prise de pièce.", fg="red")
-        elif self.gestionnaire_conditions_victoire.gestionnaire_fin_jeu.etat_jeu == \
-                GestionnaireFinJeu.TROIS_FOIS_MEME_POSITION:
-            self.infos.config(text="Égalité car cette position a été atteinte 3 fois dans la partie.", fg="red")
-
-    def nouvelle_partie(self):
-        plateau.reset()
-        self.gestionnaire_conditions_victoire.reset()
-        main_canvas.bind("<1>", self.gestion_souris)
-
-        self.joueur_actif = 1
-        self.nb_tours = 1
-
-        self.infos.config(text=f"Tour {self.nb_tours} - Au joueur {self.joueur_actif} de jouer", fg="black")
-
-
-### Corps ##############################################################################################################
-
-# Fenêtre
-main_window = tk.Tk()
-main_window.title("Echecs")
-
-# Zone de dessin
-main_canvas = tk.Canvas(main_window, bg="white", width=LARGEUR, height=HAUTEUR)
-main_canvas.grid(row=0, column=0, columnspan=2)
-
-main_window.update()  # Sans ça, le calcul de la taille du canvas est fait plus tard donc en utilisant main_canvas.winfo_width(), on obtient 1 et pas la taille réelle
-
-# Objets
-plateau = Plateau()
-jeu = Jeu()
-
-# Boutons
-button1 = tk.Button(main_window, text="Nouvelle partie", command=jeu.nouvelle_partie)
-button1.grid(row=2, column=0)
-button2 = tk.Button(main_window, text='Quitter', command=main_window.destroy)
-button2.grid(row=2, column=1)
-
-# Lancement boucle
-main_window.mainloop()

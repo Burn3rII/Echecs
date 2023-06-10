@@ -1,6 +1,6 @@
 ### Bibliothèques ######################################################################################################
 ### Paramètres de jeu ###
-from constantes import COULEUR_DAMIER1, COULEUR_DAMIER2
+from core.constantes import COULEUR_DAMIER1, COULEUR_DAMIER2
 
 ### Classes ############################################################################################################
 

@@ -2,7 +2,7 @@
 ### Externes ###
 from PIL import ImageTk, Image
 ### Paramètres de jeu ###
-from constantes import *
+from core.constantes import COULEUR_PIECE2
 
 ### Classes ############################################################################################################
 
@@ -43,7 +43,7 @@ class Piece:
         -> classes accessible from the top level of a module;
         -> instances of such classes whose the result of calling __getstate__() is picklable."""
 
-        return (self.proprietaire, self.couleur, self.image_tk.__str__())  # On convertit l'image en chaine de caractères
+        return (self.proprietaire, self.couleur)  # On ne prend pas en compte l'image car 2 cavaliers de même couleur (par exemple) sont considérés comme la même pièce. Si les 2 cavaliers échangent leur place, le plateau est quand même considéré comme étant le même.
 
     def recreer_image(self, canvas, x, y):
         self.image_canvas = canvas.create_image(x, y, image=self.image_tk)
@@ -53,7 +53,7 @@ class Pion(Piece):
     """Pion"""
 
     def __init__(self, canvas, nb_colonnes, nb_lignes, proprietaire, couleur, case_x, case_y):
-        image = "Images/PionB.png" if couleur == COULEUR_PIECE2 else "Images/PionN.png"
+        image = "../gui/Images/PionB.png" if couleur == COULEUR_PIECE2 else "../gui/Images/PionN.png"
         super().__init__(canvas, nb_colonnes, nb_lignes, proprietaire, couleur, image, case_x, case_y)
         self.deplacements = [[(0, 1), (0, 2)]] if self.couleur == COULEUR_PIECE2 else [[(0, -1), (0, -2)]]
         self.attaques = [[(1, 1)], [(-1, 1)]] if self.couleur == COULEUR_PIECE2 else [[(-1, -1)], [(1, -1)]]
@@ -72,7 +72,7 @@ class Tour(Piece):
     """Tour"""
 
     def __init__(self, canvas, nb_colonnes, nb_lignes, proprietaire, couleur, case_x, case_y):
-        image = "Images/TourB.png" if couleur == COULEUR_PIECE2 else "Images/TourN.png"
+        image = "../gui/Images/TourB.png" if couleur == COULEUR_PIECE2 else "../gui/Images/TourN.png"
         super().__init__(canvas, nb_colonnes, nb_lignes, proprietaire, couleur, image, case_x, case_y)
         self.deplacements = [[(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7)],
                              [(0, -1), (0, -2), (0, -3), (0, -4), (0, -5), (0, -6), (0, -7)],
@@ -93,7 +93,7 @@ class Cavalier(Piece):
     """Cavalier"""
 
     def __init__(self, canvas, nb_colonnes, nb_lignes, proprietaire, couleur, case_x, case_y):
-        image = "Images/CavalierB.png" if couleur == COULEUR_PIECE2 else "Images/CavalierN.png"
+        image = "../gui/Images/CavalierB.png" if couleur == COULEUR_PIECE2 else "../gui/Images/CavalierN.png"
         super().__init__(canvas, nb_colonnes, nb_lignes, proprietaire, couleur, image, case_x, case_y)
         self.deplacements = [[(1, 2)], [(2, 1)], [(1, -2)], [(2, -1)], [(-1, 2)], [(-2, 1)], [(-1, -2)], [(-2, -1)]]
 
@@ -109,7 +109,7 @@ class Fou(Piece):
     """Fou"""
 
     def __init__(self, canvas, nb_colonnes, nb_lignes, proprietaire, couleur, case_x, case_y):
-        image = "Images/FouB.png" if couleur == COULEUR_PIECE2 else "Images/FouN.png"
+        image = "../gui/Images/FouB.png" if couleur == COULEUR_PIECE2 else "../gui/Images/FouN.png"
         super().__init__(canvas, nb_colonnes, nb_lignes, proprietaire, couleur, image, case_x, case_y)
         self.deplacements = [[(1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7)],
                              [(1, -1), (2, -2), (3, -3), (4, -4), (5, -5), (6, -6), (7, -7)],
@@ -128,7 +128,7 @@ class Reine(Piece):
     """Reine"""
 
     def __init__(self, canvas, nb_colonnes, nb_lignes, proprietaire, couleur, case_x, case_y):
-        image = "Images/ReineB.png" if couleur == COULEUR_PIECE2 else "Images/ReineN.png"
+        image = "../gui/Images/ReineB.png" if couleur == COULEUR_PIECE2 else "../gui/Images/ReineN.png"
         super().__init__(canvas, nb_colonnes, nb_lignes, proprietaire, couleur, image, case_x, case_y)
         self.deplacements = [[(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7)],
                              [(0, -1), (0, -2), (0, -3), (0, -4), (0, -5), (0, -6), (0, -7)],
@@ -151,7 +151,7 @@ class Roi(Piece):
     """Roi"""
 
     def __init__(self, canvas, nb_colonnes, nb_lignes, proprietaire, couleur, case_x, case_y):
-        image = "Images/RoiB.png" if couleur == COULEUR_PIECE2 else "Images/RoiN.png"
+        image = "../gui/Images/RoiB.png" if couleur == COULEUR_PIECE2 else "../gui/Images/RoiN.png"
         super().__init__(canvas, nb_colonnes, nb_lignes, proprietaire, couleur, image, case_x, case_y)
         self.deplacements = [[(0, 1)], [(-1, 0)], [(0, -1)], [(1, 0)],
                              [(1, 1)], [(1, -1)], [(-1, -1)], [(-1, 1)]]
