@@ -8,3 +8,5 @@ Il inclut toutes les règles du jeu.
 On pourra également ajouter une fonction "temps", un gestionnaire d'erreurs et apporter une éventuelle amélioration au niveau des graphismes.
 
 Enfin, même si celà n'était pas prévu au départ, on pourra penser à ajouter une fonctionnalité de jeu en ligne.
+
+Note: Cette version possède un début de division calculs/graphiques. Il reste cependant encore quelques dépendances et des choses à modifier.
