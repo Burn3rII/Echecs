@@ -1,12 +1,11 @@
 # Echecs
 ## Jeu d'échec offline se jouant sur un même ordinateur
 
-Le jeu contient encore certainement des bugs, des choses à nettoyer et des optimisations à faire.
+Jeu d'échec standard
 
 Il inclut toutes les règles du jeu.
 
-On pourra également ajouter une fonction "temps", un gestionnaire d'erreurs et apporter une éventuelle amélioration au niveau des graphismes.
+L'architecture utilisée est MVC (Model-View-Controller).
 
-Enfin, même si celà n'était pas prévu au départ, on pourra penser à ajouter une fonctionnalité de jeu en ligne.
-
-Note: Cette version possède un début de division calculs/graphiques. Il reste cependant encore quelques dépendances et des choses à modifier.
+Pour jouer, téléchargez le dossier "app" et le fichier requirements.txt.
+Vous pourrez ensuite installer les bilbiothèques requises avec la commande 'pip install -r requirements.txt'

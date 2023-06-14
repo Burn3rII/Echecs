@@ -4,11 +4,9 @@ from math import copysign
 import hashlib
 import pickle
 ### Fichiers internes ###
-from pieces import Pion, Tour, Cavalier, Fou, Reine, Roi
-from promotion import Promotion
+from .pieces import Piece, Pion, Tour, Cavalier, Fou, Reine, Roi
 ### Paramètres de jeu ###
-from core.constantes import NB_LIGNES, NB_COLONNES, LARGEUR, HAUTEUR, COULEUR_DAMIER1, COULEUR_DAMIER2, COULEUR_PIECE1, \
-                       COULEUR_PIECE2, COULEUR_CASE_ACTIVE, COULEUR_COUP_POSSIBLE1, COULEUR_COUP_POSSIBLE2
+from . import NB_LIGNES, NB_COLONNES, COULEUR_PIECE1, COULEUR_PIECE2
 
 ### Classes ############################################################################################################
 
@@ -16,19 +14,19 @@ from core.constantes import NB_LIGNES, NB_COLONNES, LARGEUR, HAUTEUR, COULEUR_DA
 class Plateau:
     """Gestion des pièces"""
 
-    def __init__(self, gui):
-        # Interface utilisateur
-        self.gui = gui
+    def __init__(self, observateurs):
+        # Observateurs
+        self.observateurs = observateurs
 
         # Dictionnaire des coups
         self.d_coups = {"non": 0, "oui": 1, "roque": 2}
 
-        # Génération et dessin pièces
+        # Pièces
         self.coups = [[None] * NB_LIGNES for _ in range(NB_COLONNES)]  # Système de coord.: Premier indice vers la droite et deuxième vers le bas, à partir du coin haut gauche
-        self.generer_pieces()
 
         self.case_active = (None, None)
         self.case_prise_en_passant = (None, None)
+        self.case_promotion = (None, None)
 
         # Déplacements légaux (ne prend pas en compte l'échec)
         self.deplacements_possibles = [[self.d_coups["non"]] * NB_LIGNES for _ in range(NB_COLONNES)]
@@ -49,30 +47,34 @@ class Plateau:
         # Sauvegarde des différents états du plateau
         self.sauv_etats_plateau = []
 
+    def lancer_jeu(self):
+        self.generer_pieces()
+
     def generer_pieces(self):
         indices_lignes = [0, 1, NB_LIGNES - 2, NB_LIGNES - 1]
         for i in range(NB_COLONNES):
             for j in indices_lignes:
                 if j in (1, NB_LIGNES - 2):
-                    self.coups[i][j] = Pion(self.gui.canvas, NB_COLONNES, NB_LIGNES,
-                                            1 if j == 1 else 2, COULEUR_PIECE2 if j == 1 else COULEUR_PIECE1, i, j)
+                    proprietaire, couleur = 1 if j == 1 else 2, COULEUR_PIECE2 if j == 1 else COULEUR_PIECE1
+                    self.coups[i][j] = Pion(proprietaire, couleur)
+                    self.notifier_observateurs_creation_piece("Pion", i, j, couleur)
                 elif j in (0, NB_LIGNES - 1):
+                    proprietaire, couleur = 1 if j == 0 else 2, COULEUR_PIECE2 if j == 0 else COULEUR_PIECE1
                     if i in (0, NB_COLONNES - 1):
-                        self.coups[i][j] = Tour(self.gui.canvas, NB_COLONNES, NB_LIGNES,
-                                                1 if j == 0 else 2, COULEUR_PIECE2 if j == 0 else COULEUR_PIECE1, i, j)
+                        self.coups[i][j] = Tour(proprietaire, couleur)
+                        self.notifier_observateurs_creation_piece("Tour", i, j, couleur)
                     elif i in (1, NB_COLONNES - 2):
-                        self.coups[i][j] = Cavalier(self.gui.canvas, NB_COLONNES, NB_LIGNES,
-                                                    1 if j == 0 else 2, COULEUR_PIECE2 if j == 0 else COULEUR_PIECE1,
-                                                    i, j)
+                        self.coups[i][j] = Cavalier(proprietaire, couleur)
+                        self.notifier_observateurs_creation_piece("Cavalier", i, j, couleur)
                     elif i in (2, NB_COLONNES - 3):
-                        self.coups[i][j] = Fou(self.gui.canvas, NB_COLONNES, NB_LIGNES,
-                                               1 if j == 0 else 2, COULEUR_PIECE2 if j == 0 else COULEUR_PIECE1, i, j)
+                        self.coups[i][j] = Fou(proprietaire, couleur)
+                        self.notifier_observateurs_creation_piece("Fou", i, j, couleur)
                     elif i == 3:
-                        self.coups[i][j] = Reine(self.gui.canvas, NB_COLONNES, NB_LIGNES,
-                                                 1 if j == 0 else 2, COULEUR_PIECE2 if j == 0 else COULEUR_PIECE1, i, j)
+                        self.coups[i][j] = Reine(proprietaire, couleur)
+                        self.notifier_observateurs_creation_piece("Reine", i, j, couleur)
                     elif i == NB_COLONNES - 4:
-                        self.coups[i][j] = Roi(self.gui.canvas, NB_COLONNES, NB_LIGNES,
-                                               1 if j == 0 else 2, COULEUR_PIECE2 if j == 0 else COULEUR_PIECE1, i, j)
+                        self.coups[i][j] = Roi(proprietaire, couleur)
+                        self.notifier_observateurs_creation_piece("Roi", i, j, couleur)
 
     def case_contient_piece_a(self, case_x, case_y, joueur):
         if self.coups[case_x][case_y] is not None and self.coups[case_x][case_y].proprietaire == joueur:
@@ -85,12 +87,12 @@ class Plateau:
         if self.case_contient_piece_a(case_x, case_y, joueur_actif):
             self.activer_piece(case_x, case_y)
             self.calculer_coups_possibles_piece_active(adversaire)
-            self.changer_couleur_case_active()
-            self.changer_couleur_coups_possibles()
+            self.notifier_observateurs_case_activee(case_x, case_y)
+            self.notifier_observateurs_coups_possibles_calcules(self.coups_possibles)
 
     def deselectionner_piece_active(self):
-        self.reset_couleur_case_active()
-        self.reset_couleur_coups_possibles()
+        self.notifier_observateurs_case_desactivee(self.case_active[0], self.case_active[1])
+        self.notifier_observateurs_coups_possibles_effaces(self.coups_possibles)
         self.desactiver_piece_active()
         self.effacer_tableau_coups_possibles()
 
@@ -128,7 +130,7 @@ class Plateau:
                     if select == 2 or (self.coups[act_x + attaque[0][0]][act_y + attaque[0][1]] is not None
                                        and not self.case_contient_piece_a(act_x + attaque[0][0], act_y + attaque[0][1],
                                                                           proprietaire_piece_active)) \
-                                   or self.case_prise_en_passant == (act_x + attaque[0][0], act_y + attaque[0][1]): # Déplacement possible si pièce adverse ou si prise en passant
+                                   or self.case_prise_en_passant == (act_x + attaque[0][0], act_y + attaque[0][1]):  # Déplacement possible si pièce adverse ou si prise en passant
                         conteneur[act_x + attaque[0][0]][act_y + attaque[0][1]] = self.d_coups["oui"]
 
         # Roque
@@ -148,7 +150,7 @@ class Plateau:
             for j in range(NB_LIGNES):
                 if self.case_contient_piece_a(i, j, joueur):
                     self.activer_piece(i, j)  # Changement temporaire de pièce active
-                    self.calculer_deplacements_ou_controles_par_piece_active(self.cases_controlees, 2)  # Au fur et à mesure, les cases contrôlées se surperposent et créées une map des cases contrôlées.
+                    self.calculer_deplacements_ou_controles_par_piece_active(self.cases_controlees, 2)  # Au fur et à mesure, les cases contrôlées se superposent et cré une map des cases contrôlées.
 
         self.desactiver_piece_active()
 
@@ -233,22 +235,20 @@ class Plateau:
         self.gerer_choses_relatives_au_roi(case_x, case_y, roque)
 
     def deplacer_piece_active(self, case_x, case_y):
+        if self.coups[case_x][case_y] is not None:
+            self.notifier_observateurs_piece_mangee(case_x, case_y)
+        self.notifier_observateurs_piece_deplacee(self.case_active[0], self.case_active[1], case_x, case_y)
         # Maj infos jeu
         self.piece_mangee_ce_tour = True if self.coups[case_x][case_y] is not None else False
-        # Effacement image pièce mangée
-        self.effacer_image(case_x, case_y)
         # Déplacement de l'objet
         self.deplacer_piece_tableau(self.case_active[0], self.case_active[1], case_x, case_y)
-        # Déplacement de l'image
-        self.recentrer_image_piece_sur_case(case_x, case_y)
 
     def gerer_deplacement_pions(self, case_x, case_y):  # Réduction portée pions après 1er déplacement + double pas + prise en passant + promotion
         prise_en_passant_possible_ce_tour = False
         if isinstance(self.coups[case_x][case_y], Pion):
             self.pion_bouge_ce_tour = True  # Maj infos de jeu
             if case_y in (0, 7):  # Promotion
-                self.promotion_pion(case_x, case_y, self.coups[case_x][case_y].couleur,
-                                    self.coups[case_x][case_y].proprietaire)
+                self.enclencher_promotion(case_x, case_y, self.coups[case_x][case_y].couleur)
             elif not self.coups[case_x][case_y].a_bouge:  # Réduction portée + activation propre prise en passant
                 if case_y == 3 or case_y == 4:
                     self.case_prise_en_passant = (case_x, int((self.case_active[1]+case_y)/2))
@@ -257,7 +257,7 @@ class Plateau:
                                                                         COULEUR_PIECE2 else [[(0, -1)]]
                 self.coups[case_x][case_y].a_bouge = True
             elif self.case_prise_en_passant == (case_x, case_y):  # Prise adverse en passant
-                self.effacer_image(case_x, case_y+1 if case_y == 2 else case_y-1)
+                self.notifier_observateurs_piece_mangee(case_x, case_y+1 if case_y == 2 else case_y-1)
                 self.coups[case_x][case_y+1 if case_y == 2 else case_y-1] = None
         else:
             self.pion_bouge_ce_tour = False  # Maj infos de jeu
@@ -279,23 +279,11 @@ class Plateau:
             self.case_active = (case_x + 1 if case_x == 6 else case_x - 2, case_y)  # On active la tour concernée
             self.jouer_coup(case_x - 1 if case_x == 6 else case_x + 1, case_y, False)
 
-    def effacer_image(self, case_x, case_y):
-        if self.coups[case_x][case_y] is not None:
-            self.gui.effacer_objet_canvas(self.coups[case_x][case_y].image_canvas)  # Un objet de canvas existe toujours
-            # même s'il n'est plus référencé. Il faut donc le détruire manuellement. Il est par contre inutile de faire
-            # quoi que ce soit pour image_tk qui se détruit quand elle n'est plus référencée.
-
-    def recentrer_image_piece_sur_case(self, case_x, case_y):
-        x, y = (case_x + 1 / 2) * LARGEUR / NB_COLONNES, (case_y + 1 / 2) * HAUTEUR / NB_LIGNES
-        self.gui.deplacer_objet_canvas(self.coups[case_x][case_y].image_canvas, x, y)
-
-    def promotion_pion(self, case_x, case_y, couleur, proprietaire):
-        promotion = Promotion(self.gui.window, couleur, proprietaire)
-        self.gui.window.wait_window(promotion.gui.window)  # Tant que la fenêtre enfant n'est pas fermée, le programme est retenu ici
-        self.gui.canvas.delete(self.coups[case_x][case_y].image_canvas)
-        self.coups[case_x][case_y] = promotion.choix_piece
-        x, y = (case_x + 1 / 2) * LARGEUR / NB_COLONNES, (case_y + 1 / 2) * HAUTEUR / NB_LIGNES
-        self.coups[case_x][case_y].recreer_image(self.gui.canvas, x, y)  # Une image dans un canvas détruit est détruite. On la reconstruit dans la canvas principal.
+    def enclencher_promotion(self, case_x, case_y, couleur):
+        """Notifie les observateurs qu'une promotion est en cours. On attend ensuite que l'utilisateur fasse son choix
+        avant d'appeler la méthode 'promouvoir_pion()'."""
+        self.case_promotion = (case_x, case_y)
+        self.notifier_observateurs_promotion_en_cours(couleur)
 
     def desactiver_roque_tours_alliees(self, joueur):
         """Sert pour le calcul de l'état du plateau. En effet, si le roi bouge, comme l'état du plateau comprend les
@@ -304,6 +292,20 @@ class Plateau:
             for j in range(NB_LIGNES):
                 if isinstance(self.coups[i][j], Tour) and self.coups[i][j].proprietaire == joueur:
                     self.coups[i][j].peut_roquer = False
+
+    def promouvoir_pion(self, piece_choisie):
+        proprietaire = self.coups[self.case_promotion[0]][self.case_promotion[1]].proprietaire
+        couleur = self.coups[self.case_promotion[0]][self.case_promotion[1]].couleur
+
+        classe = globals().get(piece_choisie)  # Transformation de la str en nom de classe.
+        if classe is not None and issubclass(classe, Piece):
+            self.coups[self.case_promotion[0]][self.case_promotion[1]] = classe(proprietaire, couleur)
+        else:
+            raise ValueError("Classe de la pièce choisie invalide")
+
+        self.notifier_observateurs_piece_promue(piece_choisie, self.case_promotion[0], self.case_promotion[1], couleur)
+
+        self.case_promotion = (None, None)
 
     def sauvegarder_etat_plateau(self, joueur_actif):
         plateau_serialise = pickle.dumps((self.coups, self.case_prise_en_passant, joueur_actif))  # Sérialiser un objet permet d'en obtenir une représentation binaire unique (les plateaux identiques produisent des représentations identiques et des plateaux différents des représentations différentes). On inclut également la case de prise en passant et le joueur actif car les possibilités de prise en passant et le joueur actif doivent être les mêmes pour que deux plateaux soient considérés identiques.
@@ -332,35 +334,8 @@ class Plateau:
     def effacer_sauv_etats_plateau(self):
         self.sauv_etats_plateau = []
 
-    def changer_couleur_case_active(self):
-        self.gui.damier.changer_couleur_case(self.case_active[0], self.case_active[1], COULEUR_CASE_ACTIVE)
-
-    def changer_couleur_coups_possibles(self):
-        for i in range(NB_COLONNES):
-            for j in range(NB_LIGNES):
-                if self.coups_possibles[i][j] == self.d_coups["oui"] or \
-                   self.coups_possibles[i][j] == self.d_coups["roque"]:
-                    self.gui.damier.changer_couleur_case(i, j, COULEUR_COUP_POSSIBLE1 if (i + j) % 2 == 0
-                                                      else COULEUR_COUP_POSSIBLE2)
-
-    def reset_couleur_case_active(self):
-        self.gui.damier.changer_couleur_case(self.case_active[0], self.case_active[1], COULEUR_DAMIER1
-                                         if (self.case_active[0] + self.case_active[1]) % 2 == 0 else COULEUR_DAMIER2)
-
-    def reset_couleur_coups_possibles(self):
-        for i in range(NB_COLONNES):
-            for j in range(NB_LIGNES):
-                if self.coups_possibles[i][j] != self.d_coups["non"]:
-                    self.gui.damier.changer_couleur_case(i, j, COULEUR_DAMIER1 if (i + j) % 2 == 0 else COULEUR_DAMIER2)
-
     def reset(self):
-        # Damier
-        self.gui.damier.reset()
-
-        # Images pions
-        for i in range(NB_COLONNES):
-            for j in range(NB_LIGNES):
-                self.effacer_image(i, j)
+        self.notifier_observateurs_plateau_reset()
 
         # Attributs
         self.coups = [[None] * NB_LIGNES for _ in self.coups]
@@ -373,3 +348,43 @@ class Plateau:
         self.pion_bouge_ce_tour = False
         self.piece_mangee_ce_tour = False
         self.effacer_sauv_etats_plateau()
+
+    def notifier_observateurs_creation_piece(self, piece, case_x, case_y, couleur):
+        for observateur in self.observateurs:
+            observateur.piece_creee(piece, case_x, case_y, couleur)
+
+    def notifier_observateurs_case_activee(self, case_x, case_y):
+        for observateur in self.observateurs:
+            observateur.case_activee(case_x, case_y)
+
+    def notifier_observateurs_case_desactivee(self, case_x, case_y):
+        for observateur in self.observateurs:
+            observateur.case_desactivee(case_x, case_y)
+
+    def notifier_observateurs_coups_possibles_calcules(self, coups_possibles):
+        for observateur in self.observateurs:
+            observateur.coups_possibles_calcules(coups_possibles)
+
+    def notifier_observateurs_coups_possibles_effaces(self, coups_possibles):
+        for observateur in self.observateurs:
+            observateur.coups_possibles_effaces(coups_possibles)
+
+    def notifier_observateurs_piece_deplacee(self, case_x_avant, case_y_avant, case_x_apres, case_y_apres):
+        for observateur in self.observateurs:
+            observateur.piece_deplacee(case_x_avant, case_y_avant, case_x_apres, case_y_apres)
+
+    def notifier_observateurs_piece_mangee(self, case_x, case_y):
+        for observateur in self.observateurs:
+            observateur.piece_mangee(case_x, case_y)
+
+    def notifier_observateurs_promotion_en_cours(self, couleur):
+        for observateur in self.observateurs:
+            observateur.promotion_en_cours(couleur)
+
+    def notifier_observateurs_piece_promue(self, piece_choisie, case_x, case_y, couleur):
+        for observateur in self.observateurs:
+            observateur.piece_promue(piece_choisie, case_x, case_y, couleur)
+
+    def notifier_observateurs_plateau_reset(self):
+        for observateur in self.observateurs:
+            observateur.plateau_reset()

@@ -1,14 +1,20 @@
 ### Bibliothèques ######################################################################################################
 ### Fichiers internes ###
-from pieces import Pion, Tour, Cavalier, Fou, Reine
+from .pieces import Pion, Tour, Cavalier, Fou, Reine
 ### Paramètres de jeu ###
-from core.constantes import NB_LIGNES, NB_COLONNES
+from . import NB_LIGNES, NB_COLONNES
 
 ### Classes ############################################################################################################
 
 
-class GestionnaireConditionsVictoire:
-    def __init__(self, plateau, gui):
+class GestionnaireConditionsArret:
+    """Gestion conditions d'arrêt du jeu"""
+
+    def __init__(self, plateau, observateurs):
+        # Observateurs
+        self.observateurs = observateurs
+
+        # Plateau
         self.plateau = plateau
 
         """Très important: En Python, les types de données immuables comprennent :
@@ -72,18 +78,21 @@ class GestionnaireConditionsVictoire:
         d'appeler des méthodes de la classe chargées de le faire."""
 
         # Gestionnaire état du jeu
-        self.gestionnaire_fin_jeu = GestionnaireFinJeu(gui)
+        self.gestionnaire_fin_jeu = GestionnaireFinJeu(self.observateurs)
 
         # Conditions de victoire
         self.compteur_tours_sans_evolution = 0
 
-    def gerer_conditions_arret(self, joueur_actif, adversaire):
-        self.gestion_manque_materiel(joueur_actif)
-        self.gestion_50_tours_sans_evolution()
-        self.gestion_3x_meme_position(joueur_actif)
-        self.gestion_menaces_roi(joueur_actif, adversaire)
+    def get_etat_jeu(self):
+        return self.gestionnaire_fin_jeu.get_etat_jeu()
 
-    def gestion_manque_materiel(self, joueur):
+    def gerer_conditions_arret(self, joueur_actif, adversaire):
+        self.gerer_manque_materiel(joueur_actif)
+        self.gerer_50_tours_sans_evolution()
+        self.gerer_3x_meme_position(joueur_actif)
+        self.gerer_menaces_roi(joueur_actif, adversaire)
+
+    def gerer_manque_materiel(self, joueur):
         if self.manque_materiel(joueur):
             self.gestionnaire_fin_jeu.arreter_jeu(GestionnaireFinJeu.MANQUE_MATERIEL)
 
@@ -94,6 +103,7 @@ class GestionnaireConditionsVictoire:
         compteur_cavaliers_joueur2 = 0
         for i in range(NB_COLONNES):
             for j in range(NB_LIGNES):
+
                 if isinstance(self.plateau.coups[i][j], (Pion, Tour, Reine)):
                     return False
                 elif isinstance(self.plateau.coups[i][j], Fou):
@@ -113,7 +123,7 @@ class GestionnaireConditionsVictoire:
                     return False
         return True
 
-    def gestion_50_tours_sans_evolution(self):
+    def gerer_50_tours_sans_evolution(self):
         self.maj_nb_tours_sans_evolution()
         if self.compteur_tours_sans_evolution > 49:
             self.gestionnaire_fin_jeu.arreter_jeu(GestionnaireFinJeu.CINQUANTE_TOURS_SANS_EVOLUTION)
@@ -124,7 +134,7 @@ class GestionnaireConditionsVictoire:
         else:
             self.compteur_tours_sans_evolution += 1
 
-    def gestion_3x_meme_position(self, joueur_actif):
+    def gerer_3x_meme_position(self, joueur_actif):
         if self.compteur_tours_sans_evolution == 0:  # Si une évolution a eu lieu, on ne pourra pas retrouver de positions précédentes
             self.plateau.effacer_sauv_etats_plateau()
         self.plateau.sauvegarder_etat_plateau(joueur_actif)
@@ -140,7 +150,7 @@ class GestionnaireConditionsVictoire:
                 return True
         return False
 
-    def gestion_menaces_roi(self, joueur_actif, adversaire):
+    def gerer_menaces_roi(self, joueur_actif, adversaire):
         if not self.adversaire_a_coup_possible(joueur_actif, adversaire):
             if self.adversaire_en_echec(joueur_actif):
                 self.gestionnaire_fin_jeu.arreter_jeu(GestionnaireFinJeu.VICTOIRE)
@@ -192,15 +202,22 @@ class GestionnaireFinJeu:
     TROIS_FOIS_MEME_POSITION = 5
     CINQUANTE_TOURS_SANS_EVOLUTION = 6
 
-    def __init__(self, gui):
-        # Interface utilisateur
-        self.gui = gui
+    def __init__(self, observateurs):
+        # Observateurs
+        self.observateurs = observateurs
 
         self.etat_jeu = GestionnaireFinJeu.JEU_CONTINUE
+
+    def get_etat_jeu(self):
+        return self.etat_jeu
 
     def arreter_jeu(self, nouvel_etat_jeu):
         self.etat_jeu = nouvel_etat_jeu
-        self.gui.desactiver_souris()
+        self.notifier_observateurs_jeu_arrete()
 
     def reset(self):
         self.etat_jeu = GestionnaireFinJeu.JEU_CONTINUE
+
+    def notifier_observateurs_jeu_arrete(self):
+        for observateur in self.observateurs:
+            observateur.jeu_arrete()
