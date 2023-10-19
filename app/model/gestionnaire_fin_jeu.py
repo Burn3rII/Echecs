@@ -1,14 +1,20 @@
-### Bibliothèques ######################################################################################################
-### Fichiers internes ###
-from .pieces import Pion, Tour, Cavalier, Fou, Reine
-### Paramètres de jeu ###
-from . import NB_LIGNES, NB_COLONNES
+"""Gestionnaire de la fin du jeu. S'occupe de détecter les conditions qui
+mettent fin au jeu et d'arrêter le jeu une fois qu'une condition requise
+a été remplie.
+"""
 
-### Classes ############################################################################################################
+# -------------------------Bibliothèques---------------------------------------
+# ----- Fichiers internes
+from .pieces import Pion, Tour, Cavalier, Fou, Reine
+# ----- Paramètres de jeu
+from .constantes import NB_LIGNES, NB_COLONNES
+
+# -------------------------Classes---------------------------------------------
 
 
 class GestionnaireConditionsArret:
-    """Gestion conditions d'arrêt du jeu"""
+    """Gestion conditions d'arrêt du jeu
+    """
 
     def __init__(self, plateau, observateurs):
         # Observateurs
@@ -17,86 +23,121 @@ class GestionnaireConditionsArret:
         # Plateau
         self.plateau = plateau
 
-        """Très important: En Python, les types de données immuables comprennent :
+        """Très important: En Python, les types de données immuables
+        comprennent :
 
-        Nombres immuables : int (entiers), float (nombres à virgule flottante), complex (nombres complexes)
+        Nombres immuables : int (entiers), float (nombres à virgule
+        flottante), complex (nombres complexes)
         Booléens : bool (True, False)
         Chaînes de caractères : str
         Tuples : tuple
         Frozensets : frozenset
 
-        Ces types de données immuables ne peuvent pas être modifiés une fois qu'ils sont créés. Lorsque vous effectuez
-        des opérations qui semblent modifier ces objets, en réalité, de nouvelles instances d'objets sont créées avec
-        les valeurs mises à jour, et les variables sont réattribuées pour faire référence à ces nouvelles instances.
-        Donc si on fait a=1 puis b=a puis a=2, a et b pointent au départ vers une même case contenant l'int 1. Quand on
-        fait a=2, une nouvelle case contenant l'int est créée et a pointe dessus mais b continue de pointer vers l'int
-        1.
-        Rmq: si on fait alors b=3, plus rien ne pointe vers l'int 1: la case est alors détruite.
+        Ces types de données immuables ne peuvent pas être modifiés une
+        fois qu'ils sont créés. Lorsque vous effectuez des opérations
+        qui semblent modifier ces objets, en réalité, de nouvelles
+        instances d'objets sont créées avec les valeurs mises à jour,
+        et les variables sont réattribuées pour faire référence à ces
+        nouvelles instances.
+        Donc si on fait a=1 puis b=a puis a=2, a et b pointent au départ
+        vers une même case contenant l'int 1. Quand on fait a=2,
+        une nouvelle case contenant l'int est créée et a pointe dessus
+        mais b continue de pointer vers l'int 1.
+        Rmq: si on fait alors b=3, plus rien ne pointe vers l'int 1: la
+        case est alors détruite.
 
-        D'un autre côté, les types de données mutables en Python comprennent :
+        D'un autre côté, les types de données mutables en Python
+        comprennent :
 
         Listes : list
         Dictionnaires : dict
         Ensembles : set
 
-        Ces types de données mutables peuvent être modifiés après leur création. Les opérations effectuées sur ces
-        objets peuvent modifier leur contenu sans créer de nouvelles instances.
-        Ici, comme plateau est une liste, si le plateau contenu dans la classe Jeu est modifié, la référence à ce
-        plateau dans le gestionnaire de victoire verra ce changement. Ca n'est par ailleurs pas une copie du tableau
-        donc on a pas de duplication de tableau.
-        Rmq: Si on veut réellement copier un tableau, il existe plusieurs approches:
+        Ces types de données mutables peuvent être modifiés après leur
+        création. Les opérations effectuées sur ces objets peuvent
+        modifier leur contenu sans créer de nouvelles instances.
+        Ici, comme plateau est une liste, si le plateau contenu dans la
+        classe Jeu est modifié, la référence à ce plateau dans le
+        gestionnaire de victoire verra ce changement. Ca n'est par
+        ailleurs pas une copie du tableau donc on a pas de duplication
+        de tableau.
+        Rmq: Si on veut réellement copier un tableau, il existe
+        plusieurs approches :
 
-        Utiliser la méthode copy() : Vous pouvez utiliser la méthode copy() intégrée pour créer une copie de la liste. 
-        Cette méthode effectue une copie superficielle, ce qui signifie que les objets contenus dans la liste ne sont 
-        pas copiés, mais les références à ces objets sont copiées. Par conséquent, si les objets contenus dans la liste 
-        sont également mutables, ils seront toujours partagés entre la liste d'origine et la copie.
+        Utiliser la méthode copy() : Vous pouvez utiliser la méthode
+        copy() intégrée pour créer une copie de la liste.
+        Cette méthode effectue une copie superficielle, ce qui signifie
+        que les objets contenus dans la liste ne sont pas copiés, mais
+        les références à ces objets sont copiées. Par conséquent, si les
+        objets contenus dans la liste sont également mutables, ils
+        seront toujours partagés entre la liste d'origine et la copie.
         a = [1, 2, 3]
         b = a.copy()
 
-        Utiliser l'opérateur de slicing ([:]) : Vous pouvez utiliser l'opérateur de slicing pour créer une copie de la 
-        liste. Cela crée une nouvelle liste avec des éléments identiques à la liste d'origine. Cette méthode est 
-        également une copie superficielle.
+        Utiliser l'opérateur de slicing ([:]) : Vous pouvez utiliser
+        l'opérateur de slicing pour créer une copie de la liste. Cela
+        crée une nouvelle liste avec des éléments identiques à la liste
+        d'origine. Cette méthode est également une copie superficielle.
         a = [1, 2, 3]
         b = a[:]
 
-        Utiliser la fonction list() : Vous pouvez utiliser la fonction list() pour créer une nouvelle liste à partir de 
-        la liste existante. Cela crée également une copie superficielle.
+        Utiliser la fonction list() : Vous pouvez utiliser la fonction
+        list() pour créer une nouvelle liste à partir de la liste
+        existante. Cela crée également une copie superficielle.
         a = [1, 2, 3]
         b = list(a)
 
-        Si vous avez besoin de créer une copie profonde de la liste, où les objets contenus dans la liste sont également
-        copiés de manière indépendante, vous pouvez utiliser le module copy de Python et sa fonction deepcopy() :
+        Si vous avez besoin de créer une copie profonde de la liste, où
+        les objets contenus dans la liste sont également copiés de
+        manière indépendante, vous pouvez utiliser le module copy de
+        Python et sa fonction deepcopy() :
         a = [1, 2, [3, 4]]
         b = copy.deepcopy(a)
-        Avec deepcopy(), une copie complètement indépendante de la liste est créée, y compris les objets contenus à 
-        l'intérieur. Cela garantit que les modifications apportées à la liste d'origine ne seront pas répercutées sur la
-        copie, et vice versa.
+        Avec deepcopy(), une copie complètement indépendante de la liste
+        est créée, y compris les objets contenus à l'intérieur. Cela
+        garantit que les modifications apportées à la liste d'origine ne
+        seront pas répercutées sur la copie, et vice versa.
 
-        Rmq: si une classe personnalisée contient des attributs immuables et des attributs mutables, ceux-ci le
-        resteront. Lorsqu'on créer une référence à un objet de classe personnalisée, il est donc conseillé de ne se
-        servir de cette référence que pour lire des valeurs. Si on veut modifier des valeurs, il peut-être judicieux
-        d'appeler des méthodes de la classe chargées de le faire."""
+        Rmq: si une classe personnalisée contient des attributs
+        immuables et des attributs mutables, ceux-ci le resteront.
+        Lorsqu'on créer une référence à un objet de classe
+        personnalisée, il est donc conseillé de ne se servir de cette
+        référence que pour lire des valeurs. Si on veut modifier des
+        valeurs, il peut-être judicieux d'appeler des méthodes de la
+        classe chargées de le faire."""
 
         # Gestionnaire état du jeu
-        self.gestionnaire_fin_jeu = GestionnaireFinJeu(self.observateurs)
+        self.gestionnaire_fin_jeu = GestionnaireFinJeu(
+            self.observateurs)
 
         # Conditions de victoire
         self.compteur_tours_sans_evolution = 0
 
     def get_etat_jeu(self):
+        """Retourne l'état actuel du jeu.
+        """
         return self.gestionnaire_fin_jeu.get_etat_jeu()
 
     def gerer_conditions_arret(self, joueur_actif, adversaire):
+        """Vérifie toutes les conditions qui peuvent arrêter le jeu et
+        l'arrête si l'une d'elles a été rencontré."""
         self.gerer_manque_materiel(joueur_actif)
         self.gerer_50_tours_sans_evolution()
         self.gerer_3x_meme_position(joueur_actif)
         self.gerer_menaces_roi(joueur_actif, adversaire)
 
     def gerer_manque_materiel(self, joueur):
+        """Vérifie la condition de manque de matériel et arrête le jeu
+        si la condition est remplie.
+        """
         if self.manque_materiel(joueur):
-            self.gestionnaire_fin_jeu.arreter_jeu(GestionnaireFinJeu.MANQUE_MATERIEL)
+            self.gestionnaire_fin_jeu.arreter_jeu(
+                GestionnaireFinJeu.MANQUE_MATERIEL)
 
     def manque_materiel(self, joueur1):
+        """Renvoie True si on est en présence d'un manque de matériel
+        pour finir la partie, False sinon.
+        """
         compteur_fous_joueur1 = 0
         compteur_cavaliers_joueur1 = 0
         compteur_fous_joueur2 = 0
@@ -104,9 +145,11 @@ class GestionnaireConditionsArret:
         for i in range(NB_COLONNES):
             for j in range(NB_LIGNES):
 
-                if isinstance(self.plateau.coups[i][j], (Pion, Tour, Reine)):
+                if isinstance(self.plateau.coups[i][j],
+                              (Pion, Tour, Reine)):
                     return False
-                elif isinstance(self.plateau.coups[i][j], Fou):
+
+                if isinstance(self.plateau.coups[i][j], Fou):
                     if self.plateau.coups[i][j].proprietaire == joueur1:
                         compteur_fous_joueur1 += 1
                     else:
@@ -117,47 +160,76 @@ class GestionnaireConditionsArret:
                     else:
                         compteur_cavaliers_joueur2 += 1
 
-                if compteur_fous_joueur1 > 1 or compteur_fous_joueur2 > 1 \
-                        or compteur_fous_joueur1 + compteur_fous_joueur2 > 2 \
-                        or compteur_cavaliers_joueur1 + compteur_cavaliers_joueur2 > 2:
+                if (compteur_fous_joueur1 > 1
+                        or compteur_fous_joueur2 > 1
+                        or compteur_fous_joueur1 + compteur_fous_joueur2 > 2
+                        or compteur_cavaliers_joueur1 +
+                        compteur_cavaliers_joueur2 > 2):
                     return False
         return True
 
     def gerer_50_tours_sans_evolution(self):
+        """Vérifie la condition des 50 tours sans évolution et arrête
+        le jeu si la condition est remplie.
+        """
         self.maj_nb_tours_sans_evolution()
         if self.compteur_tours_sans_evolution > 49:
-            self.gestionnaire_fin_jeu.arreter_jeu(GestionnaireFinJeu.CINQUANTE_TOURS_SANS_EVOLUTION)
+            self.gestionnaire_fin_jeu.arreter_jeu(
+                GestionnaireFinJeu.CINQUANTE_TOURS_SANS_EVOLUTION)
 
     def maj_nb_tours_sans_evolution(self):
-        if self.plateau.piece_mangee_ce_tour or self.plateau.pion_bouge_ce_tour:
+        """Met à jour le nombre de tours sans évolution.
+        """
+        if (self.plateau.piece_mangee_ce_tour
+                or self.plateau.pion_bouge_ce_tour):
             self.compteur_tours_sans_evolution = 0
         else:
             self.compteur_tours_sans_evolution += 1
 
     def gerer_3x_meme_position(self, joueur_actif):
-        if self.compteur_tours_sans_evolution == 0:  # Si une évolution a eu lieu, on ne pourra pas retrouver de positions précédentes
+        """Vérifie la condition de la présence, 3x dans une même partie
+        de la même position et arrête le jeu si la condition est
+        remplie.
+        """
+        if self.compteur_tours_sans_evolution == 0:  # Si une évolution
+            # a eu lieu, on ne pourra pas retrouver de positions datant
+            # d'avant l'évolution.
             self.plateau.effacer_sauv_etats_plateau()
         self.plateau.sauvegarder_etat_plateau(joueur_actif)
         if self.trois_fois_meme_position():
-            self.gestionnaire_fin_jeu.arreter_jeu(GestionnaireFinJeu.TROIS_FOIS_MEME_POSITION)
+            self.gestionnaire_fin_jeu.arreter_jeu(
+                GestionnaireFinJeu.TROIS_FOIS_MEME_POSITION)
 
     def trois_fois_meme_position(self):
+        """Renvoie True si la même position a été atteinte 3x dans la
+        partie, False sinon.
+        """
         self.plateau.sauv_etats_plateau = sorted(
-            self.plateau.sauv_etats_plateau)  # Tri du tableau par ordre alphabétique
+            self.plateau.sauv_etats_plateau)  # Tri du tableau par ordre
+        # alphabétique
         for i in range(len(self.plateau.sauv_etats_plateau) - 2):
-            if self.plateau.sauv_etats_plateau[i] == self.plateau.sauv_etats_plateau[i + 1] == \
-                    self.plateau.sauv_etats_plateau[i + 2]:
+            if (self.plateau.sauv_etats_plateau[i]
+                    == self.plateau.sauv_etats_plateau[i + 1]
+                    == self.plateau.sauv_etats_plateau[i + 2]):
                 return True
         return False
 
     def gerer_menaces_roi(self, joueur_actif, adversaire):
+        """Vérifie les conditions portant sur les menaces au roi (pat et
+        échec et mat) et arrête le jeu si la condition est remplie.
+        """
         if not self.adversaire_a_coup_possible(joueur_actif, adversaire):
             if self.adversaire_en_echec(joueur_actif):
-                self.gestionnaire_fin_jeu.arreter_jeu(GestionnaireFinJeu.VICTOIRE)
+                self.gestionnaire_fin_jeu.arreter_jeu(
+                    GestionnaireFinJeu.VICTOIRE)
             else:
-                self.gestionnaire_fin_jeu.arreter_jeu(GestionnaireFinJeu.PAT)
+                self.gestionnaire_fin_jeu.arreter_jeu(
+                    GestionnaireFinJeu.PAT)
 
     def adversaire_a_coup_possible(self, joueur_actif, adversaire):
+        """Renvoie True si l'adversaire a un coup possible, False
+        sinon.
+        """
         for i in range(NB_COLONNES):
             for j in range(NB_LIGNES):
                 if self.plateau.case_contient_piece_a(i, j, adversaire):
@@ -166,11 +238,15 @@ class GestionnaireConditionsArret:
         return False
 
     def piece_a_coup_possible(self, case_x, case_y, joueur_actif):
+        """Renvoie True si la pièce située sur la case donnée a un coup
+        possible, False sinon.
+        """
         self.plateau.activer_piece(case_x, case_y)
         self.plateau.calculer_coups_possibles_piece_active(joueur_actif)
         for i in range(NB_COLONNES):
             for j in range(NB_LIGNES):
-                if self.plateau.coups_possibles[i][j] != self.plateau.d_coups["non"]:
+                if (self.plateau.coups_possibles[i][j]
+                        != self.plateau.dict_coups["non"]):
                     self.plateau.desactiver_piece_active()
                     self.plateau.effacer_tableau_coups_possibles()
                     return True
@@ -179,15 +255,22 @@ class GestionnaireConditionsArret:
         return False
 
     def adversaire_en_echec(self, joueur_actif):
-        roi_adverse_x, roi_adverse_y = self.plateau.pos_roi_n if joueur_actif == 1 else self.plateau.pos_roi_b
+        """Renvoie True si l'adversaire est en échec, False sinon.
+        """
+        roi_adverse_x, roi_adverse_y = (self.plateau.pos_roi_n
+                                        if joueur_actif == 1
+                                        else self.plateau.pos_roi_b)
         self.plateau.calculer_cases_controlees_par(joueur_actif)
-        if self.plateau.cases_controlees[roi_adverse_x][roi_adverse_y] != self.plateau.d_coups["non"]:
+        if (self.plateau.cases_controlees[roi_adverse_x][roi_adverse_y]
+                != self.plateau.dict_coups["non"]):
             self.plateau.effacer_cases_controlees()
             return True
         self.plateau.effacer_cases_controlees()
         return False
 
     def reset(self):
+        """Réinitialise l'état du jeu.
+        """
         self.gestionnaire_fin_jeu.reset()
 
 
@@ -209,15 +292,25 @@ class GestionnaireFinJeu:
         self.etat_jeu = GestionnaireFinJeu.JEU_CONTINUE
 
     def get_etat_jeu(self):
+        """Renvoie l'état actuel du jeu.
+        """
         return self.etat_jeu
 
     def arreter_jeu(self, nouvel_etat_jeu):
+        """Défini le nouvel état du jeu et indique aux observateurs que
+        le jeu a atteints une condition d'arrêt.
+        """
         self.etat_jeu = nouvel_etat_jeu
         self.notifier_observateurs_jeu_arrete()
 
     def reset(self):
+        """Réinitialise l'état du jeu.
+        """
         self.etat_jeu = GestionnaireFinJeu.JEU_CONTINUE
 
     def notifier_observateurs_jeu_arrete(self):
+        """Indique aux observateurs que le jeu a atteints une condition
+        d'arrêt.
+        """
         for observateur in self.observateurs:
             observateur.jeu_arrete()

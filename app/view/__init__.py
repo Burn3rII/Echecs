@@ -1,24 +1,13 @@
-##### FENÊTRE PRINCIPALE #####
+"""Le fichier __init__.py est principalement utilisé pour organiser
+l'importation et l'exposition des éléments du package.
+"""
 
-# Damier
-NB_LIGNES, NB_COLONNES = 8, 8
+# -------------------------Expositions-----------------------------------------
 
-# Fenêtre
-LARGEUR = 100*NB_COLONNES
-HAUTEUR = 100*NB_LIGNES
+from .constantes import (NB_LIGNES, NB_COLONNES, LARGEUR, HAUTEUR,
+                         COULEUR_CASE_ACTIVE, COULEUR_COUP_POSSIBLE1,
+                         COULEUR_COUP_POSSIBLE2, COULEUR_INFOS,
+                         COULEUR_INFOS_FIN_JEU, COULEUR_FOND_INFOS,
+                         NB_TYPES_PIECES, LARGEUR_PROMOTION)
 
-# Couleurs
-COULEUR_DAMIER1, COULEUR_DAMIER2 = "#DAB790", "#9D551E"
-COULEUR_PIECE1 = "black"
-COULEUR_CASE_ACTIVE = "#26C479"
-COULEUR_COUP_POSSIBLE1, COULEUR_COUP_POSSIBLE2 = "#4FC7E3", "#3A4FEA"
-COULEUR_INFOS, COULEUR_INFOS_FIN_JEU, COULEUR_FOND_INFOS = "black", "red", "#F0F0F0"
-
-##### FENÊTRE PROMOTION #####
-
-NB_TYPES_PIECES = 4
-NB_LIGNES_PROMOTION = 1
-
-# Fenêtre
-LARGEUR_PROMOTION = 100*NB_TYPES_PIECES
-HAUTEUR_PROMOTION = 100
+# -------------------------Importations----------------------------------------
